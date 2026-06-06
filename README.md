@@ -23,17 +23,48 @@ Netlifyのプロジェクト設定で、次の環境変数を登録してくだ�
 
 ## Notion DBを作成する手順
 
+### Netlify上の環境変数で作成する
+
 1. Notionで、対象の親ページにNotion連携を招待します。
-2. Netlifyまたはローカル環境に `NOTION_API_KEY` と `NOTION_PARENT_PAGE_ID` を設定します。
-3. 次のコマンドを実行します。
+2. NetlifyのDeployが成功していることを確認します。
+3. ブラウザで `https://YOUR-NETLIFY-SITE.netlify.app/public/admin.html` を開きます。
+4. `LUPRO_KNOWLEDGE_SAVE_TOKEN` の値を画面に入力し、「Notion DBを作成」を押します。
+5. 既に「LUPRO実践ナレッジDB」が存在する場合は新規作成せず、既存DBのDatabase IDとURLを表示します。
+6. 表示されたDatabase IDをNetlifyの環境変数 `NOTION_DATABASE_ID` に登録します。
+
+管理ページに入力したトークンはブラウザに保存しません。AuthorizationヘッダーでFunctionへ送るためだけに使います。
+
+### ローカルで作成する
+
+ローカル環境に `NOTION_API_KEY` と `NOTION_PARENT_PAGE_ID` がある場合だけ、次のコマンドでも作成できます。
 
 ```bash
 npm run create:notion-db
 ```
 
-4. 表示された `database_id` をNetlifyの `NOTION_DATABASE_ID` に登録します。
+このスクリプトはAPIキーを表示しません。ローカルで `.env` を使う場合もGitHubへコミットしないでください。
 
-このスクリプトはAPIキーを表示しません。
+## Notion DB作成API
+
+エンドポイント:
+
+```text
+POST /.netlify/functions/create-notion-database
+```
+
+認証ヘッダー:
+
+```text
+Authorization: Bearer ${LUPRO_KNOWLEDGE_SAVE_TOKEN}
+```
+
+動作:
+
+- 認証なし、または不正なトークンでは401を返します。
+- 作成前にNotion検索で「LUPRO実践ナレッジDB」の既存DBを確認します。
+- 既存DBがある場合は新規作成せず、既存の `database_id` と `url` を返します。
+- 新規作成した場合も `database_id` と `url` を返します。
+- `NOTION_API_KEY` と `LUPRO_KNOWLEDGE_SAVE_TOKEN` の値はレスポンスに含めません。
 
 ## 保存API
 
@@ -75,11 +106,13 @@ curl -X POST "https://YOUR-NETLIFY-SITE.netlify.app/.netlify/functions/save-lupr
 
 1. GitHubにこのコードがpushされていることを確認します。
 2. Netlifyの対象サイトでDeployが成功していることを確認します。
-3. Notionの親ページに「LUPRO実践ナレッジDB」が作られていることを確認します。
-4. Netlifyの環境変数に `NOTION_DATABASE_ID` を登録します。
-5. ChatGPTで相談内容を `examples/sample-knowledge.json` と同じ形式の固定JSONにします。
-6. スマホからでも使えるHTTPリクエストツール、またはChatGPTの連携ワークフローから保存APIへPOSTします。
-7. Notion DBに新しいページが作成されていることを確認します。
+3. `https://YOUR-NETLIFY-SITE.netlify.app/public/admin.html` を開きます。
+4. 保存トークンを入力して「Notion DBを作成」を押します。
+5. 画面に表示されたDatabase IDをNetlifyの環境変数 `NOTION_DATABASE_ID` に登録します。
+6. Notionの親ページに「LUPRO実践ナレッジDB」が作られていることを確認します。
+7. ChatGPTで相談内容を `examples/sample-knowledge.json` と同じ形式の固定JSONにします。
+8. スマホからでも使えるHTTPリクエストツール、またはChatGPTの連携ワークフローから保存APIへPOSTします。
+9. Notion DBに新しいページが作成されていることを確認します。
 
 ## 確認観点
 
