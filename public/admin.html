@@ -71,18 +71,34 @@
       font-weight: 700;
     }
 
-    input {
+    input,
+    textarea {
       width: 100%;
-      min-height: 48px;
       padding: 10px 12px;
       border: 1px solid var(--line);
       border-radius: 6px;
       font: inherit;
     }
 
+    input {
+      min-height: 48px;
+    }
+
+    textarea {
+      min-height: 280px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
     .actions {
       display: grid;
       gap: 10px;
+    }
+
+    .custom-actions {
+      grid-template-columns: 1fr;
     }
 
     button {
@@ -162,6 +178,10 @@
       .actions {
         grid-template-columns: repeat(3, minmax(0, 1fr));
       }
+
+      .custom-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
   </style>
 </head>
@@ -176,6 +196,20 @@
         保存トークン
         <input id="token" name="token" type="password" autocomplete="off" required>
       </label>
+    </section>
+
+    <section class="panel">
+      <h2>固定JSONを貼り付けて保存</h2>
+      <p>ChatGPTで生成したLUPRO実践ナレッジ化の固定JSONを貼り付け、検証後にNotion DBへ保存します。</p>
+      <label for="custom-json">
+        固定JSON
+        <textarea id="custom-json" name="custom-json" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="{&#10;  &quot;project_title&quot;: &quot;...&quot;&#10;}"></textarea>
+      </label>
+      <div class="actions custom-actions">
+        <button id="validate-json" class="secondary" type="button">JSONを検証</button>
+        <button id="save-json" type="button" disabled>Notionに保存</button>
+      </div>
+      <section id="custom-result" class="result" hidden aria-live="polite"></section>
     </section>
 
     <section class="panel">
@@ -198,14 +232,37 @@
   </main>
 
   <script>
+    const requiredFields = [
+      "project_title",
+      "project_category",
+      "status",
+      "background_issue",
+      "what_user_wanted_to_achieve",
+      "tools_used",
+      "implementation_summary",
+      "private_or_sensitive_info_to_hide"
+    ];
+
     const tokenInput = document.querySelector("#token");
+    const customJsonInput = document.querySelector("#custom-json");
+    const validateJsonButton = document.querySelector("#validate-json");
+    const saveJsonButton = document.querySelector("#save-json");
     const createButton = document.querySelector("#create-db");
     const unauthorizedButton = document.querySelector("#test-unauthorized");
     const saveButton = document.querySelector("#test-save");
     const missingButton = document.querySelector("#test-missing");
+    const customResult = document.querySelector("#custom-result");
     const createResult = document.querySelector("#create-result");
     const saveResult = document.querySelector("#save-result");
-    const buttons = [createButton, unauthorizedButton, saveButton, missingButton];
+    const buttons = [
+      validateJsonButton,
+      saveJsonButton,
+      createButton,
+      unauthorizedButton,
+      saveButton,
+      missingButton
+    ];
+    let validatedCustomPayload = null;
 
     function escapeHtml(value) {
       return String(value)
@@ -226,6 +283,7 @@
       buttons.forEach((button) => {
         button.disabled = active;
       });
+      saveJsonButton.disabled = active || !validatedCustomPayload;
       if (label) {
         saveResult.hidden = false;
         saveResult.className = "result info";
@@ -233,14 +291,74 @@
       }
     }
 
-    function requireToken() {
+    function setCustomBusy(active, label) {
+      buttons.forEach((button) => {
+        button.disabled = active;
+      });
+      saveJsonButton.disabled = active || !validatedCustomPayload;
+      if (label) {
+        customResult.hidden = false;
+        customResult.className = "result info";
+        customResult.textContent = label;
+      }
+    }
+
+    function requireToken(target = saveResult) {
       const token = tokenInput.value.trim();
       if (!token) {
         tokenInput.focus();
-        showResult(saveResult, "error", "保存トークンを入力してください。");
+        showResult(target, "error", "保存トークンを入力してください。");
         return "";
       }
       return token;
+    }
+
+    function isMissing(value) {
+      if (Array.isArray(value)) return value.length === 0;
+      return value === undefined || value === null || String(value).trim() === "";
+    }
+
+    function validateRequiredFields(payload) {
+      return requiredFields.filter((field) => isMissing(payload[field]));
+    }
+
+    function validateCustomJson() {
+      validatedCustomPayload = null;
+      saveJsonButton.disabled = true;
+      const rawJson = customJsonInput.value.trim();
+
+      if (!rawJson) {
+        customJsonInput.focus();
+        showResult(customResult, "error", "固定JSONを貼り付けてください。");
+        return null;
+      }
+
+      let payload;
+      try {
+        payload = JSON.parse(rawJson);
+      } catch (error) {
+        showResult(customResult, "error", `<strong>JSONとしてパースできません。</strong><br>${escapeHtml(error.message)}`);
+        return null;
+      }
+
+      if (!payload || Array.isArray(payload) || typeof payload !== "object") {
+        showResult(customResult, "error", "JSONの最上位はオブジェクトにしてください。");
+        return null;
+      }
+
+      const missingFields = validateRequiredFields(payload);
+      if (missingFields.length > 0) {
+        showResult(customResult, "error", `
+          <strong>必須項目が不足しています。</strong><br>
+          不足項目: <code>${escapeHtml(missingFields.join(", "))}</code>
+        `);
+        return null;
+      }
+
+      validatedCustomPayload = payload;
+      saveJsonButton.disabled = false;
+      showResult(customResult, "success", "JSONの検証に成功しました。Notionに保存できます。");
+      return payload;
     }
 
     async function readJsonResponse(response) {
@@ -260,7 +378,7 @@
     function renderStatus(title, response, data) {
       const statusLine = `${response.status} ${response.statusText || ""}`.trim();
       const pageLink = data.url
-        ? `<br>Notion URL: <a href="${escapeHtml(data.url)}" target="_blank" rel="noreferrer">ページを開く</a>`
+        ? `<br>Notion URL: <a href="${escapeHtml(data.url)}" target="_blank" rel="noreferrer">${escapeHtml(data.url)}</a>`
         : "";
       const pageId = data.page_id ? `<br>Page ID: <code>${escapeHtml(data.page_id)}</code>` : "";
       const missing = Array.isArray(data.missing_fields) && data.missing_fields.length
@@ -278,8 +396,46 @@
       `;
     }
 
+    customJsonInput.addEventListener("input", () => {
+      validatedCustomPayload = null;
+      saveJsonButton.disabled = true;
+      customResult.hidden = true;
+    });
+
+    validateJsonButton.addEventListener("click", () => {
+      validateCustomJson();
+    });
+
+    saveJsonButton.addEventListener("click", async () => {
+      const token = requireToken(customResult);
+      if (!token) return;
+
+      const payload = validatedCustomPayload || validateCustomJson();
+      if (!payload) return;
+
+      setCustomBusy(true, "Notionに保存しています...");
+
+      try {
+        const response = await fetch("/.netlify/functions/save-lupro-knowledge", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+        const data = await readJsonResponse(response);
+        const ok = response.ok && (data.page_id || data.url);
+        showResult(customResult, ok ? "success" : "error", renderStatus(ok ? "Notionに保存しました。" : "Notionへの保存に失敗しました。", response, data));
+      } catch (error) {
+        showResult(customResult, "error", `<strong>Notionへの保存に失敗しました。</strong><br>${escapeHtml(error.message)}`);
+      } finally {
+        setCustomBusy(false);
+      }
+    });
+
     createButton.addEventListener("click", async () => {
-      const token = requireToken();
+      const token = requireToken(createResult);
       if (!token) return;
 
       createButton.disabled = true;
@@ -295,7 +451,7 @@
         const data = await readJsonResponse(response);
 
         if (!response.ok) {
-          showResult(createResult, "error", renderStatus("DB作成 / 取得に失敗しました", response, data));
+          showResult(createResult, "error", renderStatus("DB作成 / 取得に失敗しました。", response, data));
           return;
         }
 
@@ -326,7 +482,7 @@
         });
         const data = await readJsonResponse(response);
         const ok = response.status === 401;
-        showResult(saveResult, ok ? "success" : "error", renderStatus(ok ? "期待通り401です" : "401以外が返りました", response, data));
+        showResult(saveResult, ok ? "success" : "error", renderStatus(ok ? "期待通り401です。" : "401以外が返りました。", response, data));
       } catch (error) {
         showResult(saveResult, "error", `<strong>認証なしテストに失敗しました。</strong><br>${escapeHtml(error.message)}`);
       } finally {
@@ -335,7 +491,7 @@
     });
 
     saveButton.addEventListener("click", async () => {
-      const token = requireToken();
+      const token = requireToken(saveResult);
       if (!token) return;
       setBusy(true, "サンプル保存テストを実行中...");
 
@@ -351,7 +507,7 @@
         });
         const data = await readJsonResponse(response);
         const ok = response.ok && (data.page_id || data.url);
-        showResult(saveResult, ok ? "success" : "error", renderStatus(ok ? "保存に成功しました" : "保存に失敗しました", response, data));
+        showResult(saveResult, ok ? "success" : "error", renderStatus(ok ? "保存に成功しました。" : "保存に失敗しました。", response, data));
       } catch (error) {
         showResult(saveResult, "error", `<strong>サンプル保存テストに失敗しました。</strong><br>${escapeHtml(error.message)}`);
       } finally {
@@ -360,7 +516,7 @@
     });
 
     missingButton.addEventListener("click", async () => {
-      const token = requireToken();
+      const token = requireToken(saveResult);
       if (!token) return;
       setBusy(true, "必須項目不足テストを実行中...");
 
@@ -378,7 +534,7 @@
         });
         const data = await readJsonResponse(response);
         const ok = response.status === 400;
-        showResult(saveResult, ok ? "success" : "error", renderStatus(ok ? "期待通り400です" : "400以外が返りました", response, data));
+        showResult(saveResult, ok ? "success" : "error", renderStatus(ok ? "期待通り400です。" : "400以外が返りました。", response, data));
       } catch (error) {
         showResult(saveResult, "error", `<strong>必須項目不足テストに失敗しました。</strong><br>${escapeHtml(error.message)}`);
       } finally {
