@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>LUPRO Notion DB 管理</title>
+  <title>LUPRO Notion 管理</title>
   <style>
     :root {
       color-scheme: light;
-      --bg: #f7f5ef;
+      --bg: #f6f4ef;
       --surface: #ffffff;
       --text: #1f2933;
       --muted: #65758b;
@@ -16,6 +16,7 @@
       --accent-dark: #175d50;
       --danger: #b42318;
       --success: #0f766e;
+      --warning: #9a5b00;
     }
 
     * {
@@ -32,7 +33,7 @@
     }
 
     main {
-      width: min(100%, 720px);
+      width: min(100%, 760px);
       margin: 0 auto;
       padding: 24px 16px 40px;
     }
@@ -43,12 +44,18 @@
       line-height: 1.3;
     }
 
+    h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.35;
+    }
+
     p {
       margin: 0 0 16px;
       color: var(--muted);
     }
 
-    form {
+    .panel {
       display: grid;
       gap: 14px;
       margin-top: 20px;
@@ -73,6 +80,11 @@
       font: inherit;
     }
 
+    .actions {
+      display: grid;
+      gap: 10px;
+    }
+
     button {
       min-height: 48px;
       border: 0;
@@ -84,6 +96,14 @@
       cursor: pointer;
     }
 
+    button.secondary {
+      background: #334155;
+    }
+
+    button.warning {
+      background: var(--warning);
+    }
+
     button:disabled {
       cursor: wait;
       opacity: 0.65;
@@ -93,13 +113,21 @@
       background: var(--accent-dark);
     }
 
-    .note,
+    button.secondary:not(:disabled):hover {
+      background: #1f2937;
+    }
+
+    button.warning:not(:disabled):hover {
+      background: #794400;
+    }
+
     .result {
-      margin-top: 18px;
+      margin-top: 12px;
       padding: 14px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--surface);
+      color: var(--text);
     }
 
     .result[hidden] {
@@ -116,53 +144,146 @@
       color: var(--danger);
     }
 
+    .result.info {
+      border-color: rgba(31, 122, 104, 0.35);
+    }
+
     code {
       word-break: break-all;
       color: var(--text);
+    }
+
+    a {
+      color: var(--accent-dark);
+      font-weight: 700;
+    }
+
+    @media (min-width: 640px) {
+      .actions {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
     }
   </style>
 </head>
 <body>
   <main>
-    <h1>LUPRO Notion DB 管理</h1>
-    <p>Netlifyに保存済みの環境変数を使って、Notion親ページ配下のDBを作成または取得します。</p>
+    <h1>LUPRO Notion 管理</h1>
+    <p>Netlify Functions と Notion 連携の確認用ページです。入力した保存トークンはブラウザに保存せず、Authorization ヘッダーにだけ使用します。</p>
 
-    <form id="create-form" autocomplete="off">
+    <section class="panel">
+      <h2>共通設定</h2>
       <label for="token">
         保存トークン
         <input id="token" name="token" type="password" autocomplete="off" required>
       </label>
-      <button id="submit" type="submit">Notion DBを作成</button>
-    </form>
+    </section>
 
-    <section id="result" class="result" hidden aria-live="polite"></section>
+    <section class="panel">
+      <h2>Notion DB 作成</h2>
+      <p>まだ Database ID を登録していない場合に使います。登録済みなら既存DBのIDとURLを返します。</p>
+      <button id="create-db" type="button">Notion DBを作成 / 取得</button>
+      <section id="create-result" class="result" hidden aria-live="polite"></section>
+    </section>
 
-    <section class="note">
-      <p>作成後に表示されるDatabase IDを、Netlify環境変数 <code>NOTION_DATABASE_ID</code> に追加してください。</p>
-      <p>入力したトークンはブラウザに保存しません。送信時のAuthorizationヘッダーにだけ使用します。</p>
+    <section class="panel">
+      <h2>保存APIテスト</h2>
+      <p><code>examples/sample-knowledge.json</code> を読み込み、<code>/.netlify/functions/save-lupro-knowledge</code> にPOSTします。</p>
+      <div class="actions">
+        <button id="test-unauthorized" class="secondary" type="button">認証なし 401 テスト</button>
+        <button id="test-save" type="button">サンプル保存テスト</button>
+        <button id="test-missing" class="warning" type="button">必須不足 400 テスト</button>
+      </div>
+      <section id="save-result" class="result" hidden aria-live="polite"></section>
     </section>
   </main>
 
   <script>
-    const form = document.querySelector("#create-form");
     const tokenInput = document.querySelector("#token");
-    const submitButton = document.querySelector("#submit");
-    const result = document.querySelector("#result");
+    const createButton = document.querySelector("#create-db");
+    const unauthorizedButton = document.querySelector("#test-unauthorized");
+    const saveButton = document.querySelector("#test-save");
+    const missingButton = document.querySelector("#test-missing");
+    const createResult = document.querySelector("#create-result");
+    const saveResult = document.querySelector("#save-result");
+    const buttons = [createButton, unauthorizedButton, saveButton, missingButton];
 
-    function showResult(type, html) {
-      result.className = `result ${type}`;
-      result.innerHTML = html;
-      result.hidden = false;
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
     }
 
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
+    function showResult(target, type, html) {
+      target.className = `result ${type}`;
+      target.innerHTML = html;
+      target.hidden = false;
+    }
+
+    function setBusy(active, label) {
+      buttons.forEach((button) => {
+        button.disabled = active;
+      });
+      if (label) {
+        saveResult.hidden = false;
+        saveResult.className = "result info";
+        saveResult.textContent = label;
+      }
+    }
+
+    function requireToken() {
       const token = tokenInput.value.trim();
+      if (!token) {
+        tokenInput.focus();
+        showResult(saveResult, "error", "保存トークンを入力してください。");
+        return "";
+      }
+      return token;
+    }
+
+    async function readJsonResponse(response) {
+      return response.json().catch(() => ({}));
+    }
+
+    async function loadSamplePayload() {
+      const response = await fetch("/examples/sample-knowledge.json", {
+        cache: "no-store"
+      });
+      if (!response.ok) {
+        throw new Error("サンプルJSONを読み込めませんでした。");
+      }
+      return response.json();
+    }
+
+    function renderStatus(title, response, data) {
+      const statusLine = `${response.status} ${response.statusText || ""}`.trim();
+      const pageLink = data.url
+        ? `<br>Notion URL: <a href="${escapeHtml(data.url)}" target="_blank" rel="noreferrer">ページを開く</a>`
+        : "";
+      const pageId = data.page_id ? `<br>Page ID: <code>${escapeHtml(data.page_id)}</code>` : "";
+      const missing = Array.isArray(data.missing_fields) && data.missing_fields.length
+        ? `<br>不足項目: <code>${escapeHtml(data.missing_fields.join(", "))}</code>`
+        : "";
+      const message = data.message || data.error || "";
+
+      return `
+        <strong>${escapeHtml(title)}</strong><br>
+        HTTP Status: <code>${escapeHtml(statusLine)}</code>
+        ${message ? `<br>Message: ${escapeHtml(message)}` : ""}
+        ${pageId}
+        ${pageLink}
+        ${missing}
+      `;
+    }
+
+    createButton.addEventListener("click", async () => {
+      const token = requireToken();
       if (!token) return;
 
-      submitButton.disabled = true;
-      submitButton.textContent = "作成中...";
-      result.hidden = true;
+      createButton.disabled = true;
+      createResult.hidden = true;
 
       try {
         const response = await fetch("/.netlify/functions/create-notion-database", {
@@ -171,29 +292,97 @@
             "Authorization": `Bearer ${token}`
           }
         });
-
-        const data = await response.json().catch(() => ({}));
+        const data = await readJsonResponse(response);
 
         if (!response.ok) {
-          throw new Error(data.error || "Notion DBの作成に失敗しました。");
+          showResult(createResult, "error", renderStatus("DB作成 / 取得に失敗しました", response, data));
+          return;
         }
 
-        tokenInput.value = "";
-        showResult("success", `
-          <strong>${data.created ? "作成しました。" : "既存DBを取得しました。"}</strong><br>
-          Database ID: <code>${data.database_id}</code><br>
-          <a href="${data.url}" target="_blank" rel="noreferrer">Notionで開く</a><br>
-          Netlify環境変数 <code>NOTION_DATABASE_ID</code> にこのDatabase IDを追加してください。
+        showResult(createResult, "success", `
+          <strong>${data.created ? "DBを作成しました。" : "既存DBを取得しました。"}</strong><br>
+          Database ID: <code>${escapeHtml(data.database_id || "")}</code><br>
+          ${data.url ? `<a href="${escapeHtml(data.url)}" target="_blank" rel="noreferrer">Notionで開く</a><br>` : ""}
+          Netlify環境変数 <code>NOTION_DATABASE_ID</code> にこのDatabase IDを登録してください。
         `);
       } catch (error) {
-        showResult("error", `
-          <strong>失敗しました。</strong><br>
-          ${error.message}<br>
-          Netlify環境変数、保存トークン、Notion親ページへの連携招待を確認してください。
-        `);
+        showResult(createResult, "error", `<strong>DB作成 / 取得に失敗しました。</strong><br>${escapeHtml(error.message)}`);
       } finally {
-        submitButton.disabled = false;
-        submitButton.textContent = "Notion DBを作成";
+        createButton.disabled = false;
+      }
+    });
+
+    unauthorizedButton.addEventListener("click", async () => {
+      setBusy(true, "認証なしテストを実行中...");
+
+      try {
+        const payload = await loadSamplePayload();
+        const response = await fetch("/.netlify/functions/save-lupro-knowledge", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+        const data = await readJsonResponse(response);
+        const ok = response.status === 401;
+        showResult(saveResult, ok ? "success" : "error", renderStatus(ok ? "期待通り401です" : "401以外が返りました", response, data));
+      } catch (error) {
+        showResult(saveResult, "error", `<strong>認証なしテストに失敗しました。</strong><br>${escapeHtml(error.message)}`);
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    saveButton.addEventListener("click", async () => {
+      const token = requireToken();
+      if (!token) return;
+      setBusy(true, "サンプル保存テストを実行中...");
+
+      try {
+        const payload = await loadSamplePayload();
+        const response = await fetch("/.netlify/functions/save-lupro-knowledge", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+        const data = await readJsonResponse(response);
+        const ok = response.ok && (data.page_id || data.url);
+        showResult(saveResult, ok ? "success" : "error", renderStatus(ok ? "保存に成功しました" : "保存に失敗しました", response, data));
+      } catch (error) {
+        showResult(saveResult, "error", `<strong>サンプル保存テストに失敗しました。</strong><br>${escapeHtml(error.message)}`);
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    missingButton.addEventListener("click", async () => {
+      const token = requireToken();
+      if (!token) return;
+      setBusy(true, "必須項目不足テストを実行中...");
+
+      try {
+        const payload = await loadSamplePayload();
+        delete payload.project_title;
+
+        const response = await fetch("/.netlify/functions/save-lupro-knowledge", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+        const data = await readJsonResponse(response);
+        const ok = response.status === 400;
+        showResult(saveResult, ok ? "success" : "error", renderStatus(ok ? "期待通り400です" : "400以外が返りました", response, data));
+      } catch (error) {
+        showResult(saveResult, "error", `<strong>必須項目不足テストに失敗しました。</strong><br>${escapeHtml(error.message)}`);
+      } finally {
+        setBusy(false);
       }
     });
   </script>
