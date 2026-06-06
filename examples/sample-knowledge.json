@@ -1,0 +1,26 @@
+{
+  "project_title": "LUPRO実践ナレッジ化の自動保存",
+  "project_category": "ナレッジ化",
+  "status": "下書き",
+  "tools_used": [
+    "ChatGPT",
+    "Notion",
+    "Netlify Functions",
+    "GitHub"
+  ],
+  "background_issue": "ChatGPTで相談した業務改善の内容が、その場限りで終わりやすく、後から記事素材や社内ナレッジとして再利用しにくい。",
+  "what_user_wanted_to_achieve": "スマホから相談した内容を固定JSONに整理し、Notion DBへ保存して、WordPress、note、X/Threadsの投稿素材として再利用できる状態にしたい。",
+  "worries_or_uncertainties": "Notion DBの設計を手作業で作ると再現性が低く、APIキーやトークンを安全に扱えるか不安がある。",
+  "implementation_summary": "Netlify Functionsで保存APIを作り、Notion APIを使って固定JSONをLUPRO実践ナレッジDBへ保存する。",
+  "decision_reason": "Netlify環境変数を使えば秘密情報をコードに直書きせず、GitHub連携とデプロイをまとめて管理できるため。",
+  "blockers": "Notion Database IDはDB作成後にNetlify環境変数へ追加する必要がある。",
+  "solution": "DB作成スクリプトで親ページ配下にDBを作り、表示されたDatabase IDをNOTION_DATABASE_IDとして登録する。",
+  "actual_effect": "相談内容を固定JSONとして保存でき、後から記事化や投稿案作成に使える。",
+  "things_to_prepare_beforehand": "Notion連携を作成し、親ページに連携を招待し、Netlify環境変数を登録しておく。",
+  "learnings_applicable_to_other_companies": "AI相談の結果を固定フォーマット化してDB保存すると、属人的な改善知を再利用可能な資産に変えられる。",
+  "wordpress_article_angle": "ChatGPT相談を社内ナレッジ化する自動化の作り方",
+  "note_article_angle": "スマホ相談からNotionナレッジDBまでつなげる実践メモ",
+  "x_threads_post_ideas": "ChatGPTで相談した内容をその場限りにしないため、固定JSON化してNotion DBに保存する仕組みを作った。",
+  "private_or_sensitive_info_to_hide": "APIキー、保存用トークン、顧客名、社内固有の認証情報、未公開URL",
+  "security_memo": "秘密情報はNetlify環境変数で管理し、コード、README、ログ、レスポンスには出さない。"
+}

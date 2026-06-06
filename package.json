@@ -1,0 +1,15 @@
+{
+  "name": "lupro-knowledge-automation",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Save fixed LUPRO practical knowledge JSON into a Notion database via Netlify Functions.",
+  "scripts": {
+    "create:notion-db": "node scripts/create-notion-database.js",
+    "check": "node --check scripts/create-notion-database.js && node --check netlify/functions/save-lupro-knowledge.js",
+    "dev": "npx netlify dev"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
