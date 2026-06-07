@@ -56,6 +56,25 @@ const propertyMap = {
   security_memo: "セキュリティメモ"
 };
 
+const propertyAliases = {
+  decision_reason: ["decision_reasons"],
+  blockers: ["stuck_points"],
+  actual_effect: ["actual_effects"],
+  things_to_prepare_beforehand: [
+    "things_to_prepare_before_starting",
+    "things_to_prepare_beforehand"
+  ],
+  learnings_applicable_to_other_companies: ["lessons_for_other_companies"],
+  wordpress_article_angle: ["wordpress_article_angles"],
+  note_article_angle: ["note_article_angles"],
+  worries_or_uncertainties: ["user_pain_points"]
+};
+
+const additionalPropertyMap = {
+  future_improvement_ideas: "Future improvement ideas",
+  human_review_points: "Human review points"
+};
+
 function env(name) {
   if (globalThis.Netlify?.env?.get) {
     return Netlify.env.get(name);
@@ -128,20 +147,64 @@ async function getDatabaseStatusOptionNames(notionApiKey, databaseId) {
   });
 
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) return [];
+  if (!response.ok) {
+    return {
+      statusOptionNames: [],
+      databaseProperties: null
+    };
+  }
 
   const options = data?.properties?.[propertyMap.status]?.status?.options;
-  if (!Array.isArray(options)) return [];
+  const statusOptionNames = Array.isArray(options)
+    ? options
+      .map((option) => option?.name)
+      .filter(Boolean)
+    : [];
 
-  return options
-    .map((option) => option?.name)
-    .filter(Boolean);
+  return {
+    statusOptionNames,
+    databaseProperties: data?.properties || null
+  };
 }
 
-function toText(value) {
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasObjectItem(values) {
+  return values.some((item) => item !== null && typeof item === "object");
+}
+
+function formatObject(value, indent = "") {
+  return Object.entries(value)
+    .map(([key, item]) => {
+      const formatted = toText(item, `${indent}  `);
+      if (formatted.includes("\n")) {
+        return `${indent}${key}:\n${formatted}`;
+      }
+      return `${indent}${key}: ${formatted}`;
+    })
+    .join("\n");
+}
+
+function toText(value, indent = "") {
   if (value === undefined || value === null) return "";
-  if (Array.isArray(value)) return value.map((item) => String(item)).join("\n");
-  if (typeof value === "object") return JSON.stringify(value, null, 2);
+  if (Array.isArray(value)) {
+    if (!hasObjectItem(value)) {
+      return value.map((item) => String(item)).join("\n");
+    }
+
+    return value
+      .map((item, index) => {
+        const formatted = toText(item, `${indent}  `);
+        if (formatted.includes("\n")) {
+          return `${indent}${index + 1}.\n${formatted}`;
+        }
+        return `${indent}${index + 1}. ${formatted}`;
+      })
+      .join("\n\n");
+  }
+  if (isPlainObject(value)) return formatObject(value, indent);
   return String(value);
 }
 
@@ -169,7 +232,29 @@ function multiSelect(value) {
     .map((name) => ({ name }));
 }
 
-function buildPageProperties(payload) {
+function hasDatabaseProperty(databaseProperties, notionPropertyName) {
+  if (!databaseProperties) return true;
+  return Object.prototype.hasOwnProperty.call(databaseProperties, notionPropertyName);
+}
+
+function getMappedValue(payload, jsonKey) {
+  const candidateKeys = [jsonKey, ...(propertyAliases[jsonKey] || [])];
+  for (const candidateKey of candidateKeys) {
+    if (!isMissing(payload[candidateKey])) {
+      return payload[candidateKey];
+    }
+  }
+  return "";
+}
+
+function assignRichTextProperty(properties, databaseProperties, notionPropertyName, value) {
+  if (!hasDatabaseProperty(databaseProperties, notionPropertyName)) return;
+  properties[notionPropertyName] = {
+    rich_text: richText(value)
+  };
+}
+
+function buildPageProperties(payload, databaseProperties = null) {
   const properties = {
     [propertyMap.project_title]: {
       title: richText(payload.project_title)
@@ -186,19 +271,35 @@ function buildPageProperties(payload) {
     },
     [propertyMap.tools_used]: {
       multi_select: multiSelect(payload.tools_used)
-    },
-    "JSON原文": {
-      rich_text: richText(JSON.stringify(payload, null, 2))
     }
   };
+
+  assignRichTextProperty(
+    properties,
+    databaseProperties,
+    "JSON原文",
+    JSON.stringify(payload, null, 2)
+  );
 
   for (const [jsonKey, notionPropertyName] of Object.entries(propertyMap)) {
     if (["project_title", "project_category", "status", "tools_used"].includes(jsonKey)) {
       continue;
     }
-    properties[notionPropertyName] = {
-      rich_text: richText(payload[jsonKey])
-    };
+    assignRichTextProperty(
+      properties,
+      databaseProperties,
+      notionPropertyName,
+      getMappedValue(payload, jsonKey)
+    );
+  }
+
+  for (const [jsonKey, notionPropertyName] of Object.entries(additionalPropertyMap)) {
+    assignRichTextProperty(
+      properties,
+      databaseProperties,
+      notionPropertyName,
+      payload[jsonKey]
+    );
   }
 
   return properties;
@@ -244,7 +345,7 @@ function checkAuthorization(request, expectedToken) {
 }
 
 async function createNotionPage(payload, notionApiKey, databaseId) {
-  const statusOptionNames = await getDatabaseStatusOptionNames(notionApiKey, databaseId);
+  const { statusOptionNames, databaseProperties } = await getDatabaseStatusOptionNames(notionApiKey, databaseId);
   const normalizedPayload = normalizePayload(payload, statusOptionNames);
   const response = await fetch("https://api.notion.com/v1/pages", {
     method: "POST",
@@ -258,7 +359,7 @@ async function createNotionPage(payload, notionApiKey, databaseId) {
         type: "database_id",
         database_id: databaseId
       },
-      properties: buildPageProperties(normalizedPayload),
+      properties: buildPageProperties(normalizedPayload, databaseProperties),
       children: buildJsonChildren(normalizedPayload)
     })
   });

@@ -17,6 +17,8 @@ const textPropertyNames = [
   "X/Threads投稿案",
   "公開時に伏せるべき情報",
   "セキュリティメモ",
+  "Future improvement ideas",
+  "Human review points",
   "JSON原文"
 ];
 

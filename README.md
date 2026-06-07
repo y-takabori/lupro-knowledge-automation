@@ -102,6 +102,24 @@ Authorization: Bearer ${LUPRO_KNOWLEDGE_SAVE_TOKEN}
 - `archived` -> `archived`
 - 未定義の値 -> `planning`
 
+### 追加推奨プロパティ
+
+既存のNotion DBに以下のプロパティがない場合、その項目はプロパティへは展開されません。JSON原文はこれまで通りページ本文に保存されるため、必要に応じてDBへ `rich_text` プロパティを追加してください。
+
+| JSONキー | 推奨Notionプロパティ |
+| --- | --- |
+| `wordpress_article_angles` | `WordPress記事化の切り口` |
+| `note_article_angles` | `note記事化の切り口` |
+| `x_threads_post_ideas` | `X/Threads投稿案` |
+| `actual_effects` | `実際の効果` |
+| `user_pain_points` | `悩み・迷い` |
+| `stuck_points` | `詰まったこと` |
+| `decision_reasons` | `判断理由` |
+| `lessons_for_other_companies` | `他社にも応用できる学び` |
+| `future_improvement_ideas` | `Future improvement ideas` |
+| `human_review_points` | `Human review points` |
+| `things_to_prepare_before_starting` | `事前にやっておくべきこと` |
+
 サンプル送信:
 
 ```bash
