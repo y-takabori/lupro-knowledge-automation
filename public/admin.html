@@ -341,6 +341,25 @@
       return statusMap[status] || "planning";
     }
 
+    function normalizePastedJson(rawJson) {
+      const withoutCodeFences = rawJson
+        .trim()
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/\s*```$/i, "")
+        .trim();
+      const normalizedQuotes = withoutCodeFences
+        .replace(/[“”]/g, '"')
+        .replace(/[‘’]/g, "'");
+      const jsonStart = normalizedQuotes.indexOf("{");
+      const jsonEnd = normalizedQuotes.lastIndexOf("}");
+
+      if (jsonStart === -1 || jsonEnd === -1 || jsonStart > jsonEnd) {
+        return normalizedQuotes;
+      }
+
+      return normalizedQuotes.slice(jsonStart, jsonEnd + 1).trim();
+    }
+
     function validateCustomJson() {
       validatedCustomPayload = null;
       saveJsonButton.disabled = true;
@@ -353,10 +372,11 @@
       }
 
       let payload;
+      const normalizedJson = normalizePastedJson(rawJson);
       try {
-        payload = JSON.parse(rawJson);
+        payload = JSON.parse(normalizedJson);
       } catch (error) {
-        showResult(customResult, "error", `<strong>JSONとしてパースできません。</strong><br>${escapeHtml(error.message)}`);
+        showResult(customResult, "error", `<strong>JSONとしてパースできません。</strong><br>${escapeHtml(error.message)}<br>スマートクォート（“ ” ‘ ’）や余分なコードフェンスが混ざっている可能性もあります。`);
         return null;
       }
 
@@ -376,6 +396,7 @@
 
       validatedCustomPayload = payload;
       saveJsonButton.disabled = false;
+      customJsonInput.value = normalizedJson;
       const normalizedStatus = normalizeStatus(payload.status);
       showResult(customResult, "success", `
         <strong>JSONの検証に成功しました。Notionに保存できます。</strong><br>
