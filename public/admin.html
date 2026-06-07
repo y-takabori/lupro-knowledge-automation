@@ -347,17 +347,88 @@
         .replace(/^```(?:json)?\s*/i, "")
         .replace(/\s*```$/i, "")
         .trim();
-      const normalizedQuotes = withoutCodeFences
-        .replace(/[“”]/g, '"')
-        .replace(/[‘’]/g, "'");
-      const jsonStart = normalizedQuotes.indexOf("{");
-      const jsonEnd = normalizedQuotes.lastIndexOf("}");
+      const jsonStart = withoutCodeFences.indexOf("{");
+      const jsonEnd = withoutCodeFences.lastIndexOf("}");
 
       if (jsonStart === -1 || jsonEnd === -1 || jsonStart > jsonEnd) {
-        return normalizedQuotes;
+        return normalizeSmartQuotesForJson(withoutCodeFences);
       }
 
-      return normalizedQuotes.slice(jsonStart, jsonEnd + 1).trim();
+      return normalizeSmartQuotesForJson(withoutCodeFences.slice(jsonStart, jsonEnd + 1)).trim();
+    }
+
+    function isJsonStringDelimiter(text, index, delimiters) {
+      let nextIndex = index + 1;
+      while (nextIndex < text.length && /\s/.test(text[nextIndex])) {
+        nextIndex += 1;
+      }
+      return nextIndex >= text.length || delimiters.includes(text[nextIndex]);
+    }
+
+    function normalizeSmartQuotesForJson(text) {
+      let normalized = "";
+      let inString = false;
+      let escaped = false;
+      let stringDelimiters = [",", "}", "]"];
+      const stack = [];
+
+      function currentContext() {
+        return stack[stack.length - 1];
+      }
+
+      for (let index = 0; index < text.length; index += 1) {
+        const char = text[index];
+
+        if (!inString) {
+          if (char === '"' || char === "“" || char === "”") {
+            normalized += '"';
+            inString = true;
+            stringDelimiters = currentContext()?.type === "object" && currentContext().expectKey
+              ? [":"]
+              : [",", "}", "]"];
+            continue;
+          }
+          if (char === "{") {
+            stack.push({ type: "object", expectKey: true });
+          } else if (char === "[") {
+            stack.push({ type: "array" });
+          } else if (char === "}" || char === "]") {
+            stack.pop();
+          } else if (char === ":" && currentContext()?.type === "object") {
+            currentContext().expectKey = false;
+          } else if (char === "," && currentContext()?.type === "object") {
+            currentContext().expectKey = true;
+          }
+          normalized += char === "‘" || char === "’" ? "'" : char;
+          continue;
+        }
+
+        if (escaped) {
+          normalized += char;
+          escaped = false;
+          continue;
+        }
+
+        if (char === "\\") {
+          normalized += char;
+          escaped = true;
+          continue;
+        }
+
+        if (char === '"' || char === "“" || char === "”") {
+          if (isJsonStringDelimiter(text, index, stringDelimiters)) {
+            normalized += '"';
+            inString = false;
+          } else {
+            normalized += char === "”" ? "」" : "「";
+          }
+          continue;
+        }
+
+        normalized += char === "‘" || char === "’" ? "'" : char;
+      }
+
+      return normalized;
     }
 
     function validateCustomJson() {
@@ -376,7 +447,7 @@
       try {
         payload = JSON.parse(normalizedJson);
       } catch (error) {
-        showResult(customResult, "error", `<strong>JSONとしてパースできません。</strong><br>${escapeHtml(error.message)}<br>スマートクォート（“ ” ‘ ’）や余分なコードフェンスが混ざっている可能性もあります。`);
+        showResult(customResult, "error", `<strong>JSONとしてパースできません。</strong><br>${escapeHtml(error.message)}<br>スマートクォート（“ ” ‘ ’）や余分なコードフェンスが混ざっている可能性もあります。本文中の “ ” は 「」 に置換してください。`);
         return null;
       }
 
