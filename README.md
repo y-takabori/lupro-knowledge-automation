@@ -91,6 +91,17 @@ Authorization: Bearer ${LUPRO_KNOWLEDGE_SAVE_TOKEN}
 - `implementation_summary`
 - `private_or_sensitive_info_to_hide`
 
+`status` はNotion保存前に既存のステータス選択肢へ正規化されます。推奨値は `planning`, `in_progress`, `completed`, `archived` です。
+既存DBが日本語ステータス選択肢の場合も、対応する既存選択肢に変換して保存します。
+
+正規化ルール:
+
+- `planning`, `plan` -> `planning`
+- `in_progress`, `progress`, `implementing`, `testing` -> `in_progress`
+- `mvp_test_completed`, `mvp_completed`, `completed`, `done` -> `completed`
+- `archived` -> `archived`
+- 未定義の値 -> `planning`
+
 サンプル送信:
 
 ```bash

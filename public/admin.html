@@ -243,6 +243,20 @@
       "private_or_sensitive_info_to_hide"
     ];
 
+    const statusMap = {
+      planning: "planning",
+      plan: "planning",
+      in_progress: "in_progress",
+      progress: "in_progress",
+      implementing: "in_progress",
+      testing: "in_progress",
+      mvp_test_completed: "completed",
+      mvp_completed: "completed",
+      completed: "completed",
+      done: "completed",
+      archived: "archived"
+    };
+
     const tokenInput = document.querySelector("#token");
     const customJsonInput = document.querySelector("#custom-json");
     const validateJsonButton = document.querySelector("#validate-json");
@@ -322,6 +336,11 @@
       return requiredFields.filter((field) => isMissing(payload[field]));
     }
 
+    function normalizeStatus(value) {
+      const status = String(value || "").trim().toLowerCase();
+      return statusMap[status] || "planning";
+    }
+
     function validateCustomJson() {
       validatedCustomPayload = null;
       saveJsonButton.disabled = true;
@@ -357,7 +376,12 @@
 
       validatedCustomPayload = payload;
       saveJsonButton.disabled = false;
-      showResult(customResult, "success", "JSONの検証に成功しました。Notionに保存できます。");
+      const normalizedStatus = normalizeStatus(payload.status);
+      showResult(customResult, "success", `
+        <strong>JSONの検証に成功しました。Notionに保存できます。</strong><br>
+        status推奨値: <code>planning</code>, <code>in_progress</code>, <code>completed</code>, <code>archived</code><br>
+        保存時のstatus: <code>${escapeHtml(payload.status)}</code> → <code>${escapeHtml(normalizedStatus)}</code>
+      `);
       return payload;
     }
 

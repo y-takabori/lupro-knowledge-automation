@@ -13,6 +13,27 @@ const requiredFields = [
   "private_or_sensitive_info_to_hide"
 ];
 
+const statusMap = {
+  planning: "planning",
+  plan: "planning",
+  in_progress: "in_progress",
+  progress: "in_progress",
+  implementing: "in_progress",
+  testing: "in_progress",
+  mvp_test_completed: "completed",
+  mvp_completed: "completed",
+  completed: "completed",
+  done: "completed",
+  archived: "archived"
+};
+
+const legacyStatusMap = {
+  planning: "下書き",
+  in_progress: "検証中",
+  completed: "保存済み",
+  archived: "記事化候補"
+};
+
 const propertyMap = {
   project_title: "タイトル",
   project_category: "カテゴリ",
@@ -61,6 +82,60 @@ function isMissing(value) {
 
 function validateRequiredFields(payload) {
   return requiredFields.filter((field) => isMissing(payload[field]));
+}
+
+function normalizeStatus(value) {
+  const status = String(value || "").trim().toLowerCase();
+  return statusMap[status] || "planning";
+}
+
+function resolveStatusOptionName(normalizedStatus, statusOptionNames) {
+  if (statusOptionNames.includes(normalizedStatus)) {
+    return normalizedStatus;
+  }
+
+  const legacyStatus = legacyStatusMap[normalizedStatus];
+  if (legacyStatus && statusOptionNames.includes(legacyStatus)) {
+    return legacyStatus;
+  }
+
+  if (statusOptionNames.includes("planning")) {
+    return "planning";
+  }
+
+  if (statusOptionNames.includes(legacyStatusMap.planning)) {
+    return legacyStatusMap.planning;
+  }
+
+  return normalizedStatus;
+}
+
+function normalizePayload(payload, statusOptionNames = []) {
+  const normalizedStatus = normalizeStatus(payload.status);
+  return {
+    ...payload,
+    status: resolveStatusOptionName(normalizedStatus, statusOptionNames)
+  };
+}
+
+async function getDatabaseStatusOptionNames(notionApiKey, databaseId) {
+  const response = await fetch(`https://api.notion.com/v1/databases/${databaseId}`, {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${notionApiKey}`,
+      "Notion-Version": NOTION_VERSION
+    }
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) return [];
+
+  const options = data?.properties?.[propertyMap.status]?.status?.options;
+  if (!Array.isArray(options)) return [];
+
+  return options
+    .map((option) => option?.name)
+    .filter(Boolean);
 }
 
 function toText(value) {
@@ -169,6 +244,8 @@ function checkAuthorization(request, expectedToken) {
 }
 
 async function createNotionPage(payload, notionApiKey, databaseId) {
+  const statusOptionNames = await getDatabaseStatusOptionNames(notionApiKey, databaseId);
+  const normalizedPayload = normalizePayload(payload, statusOptionNames);
   const response = await fetch("https://api.notion.com/v1/pages", {
     method: "POST",
     headers: {
@@ -181,8 +258,8 @@ async function createNotionPage(payload, notionApiKey, databaseId) {
         type: "database_id",
         database_id: databaseId
       },
-      properties: buildPageProperties(payload),
-      children: buildJsonChildren(payload)
+      properties: buildPageProperties(normalizedPayload),
+      children: buildJsonChildren(normalizedPayload)
     })
   });
 
