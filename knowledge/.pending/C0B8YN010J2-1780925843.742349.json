@@ -1,0 +1,67 @@
+{
+  "pending_key": "C0B8YN010J2-1780925843.742349",
+  "dedupe_key": "Ev0B9VLR74EL",
+  "status": "pending",
+  "created_at": "2026-06-08T13:37:26.860Z",
+  "channel": "C0B8YN010J2",
+  "thread_ts": "1780925843.742349",
+  "user": "U08H3PUHUAX",
+  "payload": {
+    "title": "Slack確認後保存テスト",
+    "knowledge_type": "notes",
+    "project_key": "slack",
+    "category": "未分類",
+    "status": "saved",
+    "tools": [
+      "ChatGPT",
+      "Codex",
+      "GitHub",
+      "Netlify",
+      "Slack"
+    ],
+    "summary": "# Slack確認後保存テスト\n\nSlackに投稿した内容を、即保存せず、スレッドで確認してからGitHubに保存できるか確認しています。\n\n目的：\n誤保存や誤更新を防ぎながら、Slack中心でナレッジを安全に蓄積すること。\n\n使用ツール：\nChatGPT, Codex, Slack, GitHub, Netlify",
+    "input_type": "markdown",
+    "body": "# Slack確認後保存テスト\n\nSlackに投稿した内容を、即保存せず、スレッドで確認してからGitHubに保存できるか確認しています。\n\n目的：\n誤保存や誤更新を防ぎながら、Slack中心でナレッジを安全に蓄積すること。\n\n使用ツール：\nChatGPT, Codex, Slack, GitHub, Netlify",
+    "save_mode": "upsert",
+    "source": "slack_event",
+    "slack_channel": "C0B8YN010J2",
+    "slack_ts": "1780925843.742349",
+    "slack_message_url": "",
+    "slack_event_id": "Ev0B9VLR74EL",
+    "json_parse_warning": "",
+    "warnings": [],
+    "extracted": {
+      "private_or_sensitive_info_to_hide": [],
+      "media_theme": "",
+      "article_main_message": "",
+      "content_strategy": "",
+      "wordpress_article_angles": "",
+      "note_article_angles": "",
+      "x_threads_post_ideas": ""
+    }
+  },
+  "candidates": [
+    {
+      "title": "Slack自動保存テストです。",
+      "project_key": "slack",
+      "knowledge_type": "notes",
+      "category": "未分類",
+      "status": "saved",
+      "tools": [
+        "ChatGPT",
+        "Codex",
+        "GitHub",
+        "Slack"
+      ],
+      "summary": "Slack自動保存テストです。\nChatGPTとCodexを使って、Slack投稿をGitHubにナレッジ保存できるか確認しています。",
+      "path": "knowledge/notes/slack/index.md",
+      "raw_json_path": "knowledge/notes/slack/raw.json",
+      "raw_md_path": "knowledge/notes/slack/raw.md",
+      "raw_txt_path": "knowledge/notes/slack/raw.txt",
+      "raw_path": "knowledge/notes/slack/raw.txt",
+      "created": "2026-06-08T22:15:57+09:00",
+      "updated": "2026-06-08T22:15:57+09:00",
+      "score": 100
+    }
+  ]
+}
