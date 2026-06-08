@@ -6,6 +6,7 @@ import {
   verifySlackSignature
 } from "./knowledge-archive-core.js";
 import { syncKnowledgeToGoogleSheets } from "./google-sheets-sync.js";
+import { handleSlackInteractivity } from "./slack-events.js";
 
 const knowledgeTypeLabels = {
   learnings: "学び・気づき",
@@ -353,6 +354,13 @@ export default async (request, context) => {
       payload = JSON.parse(params.get("payload"));
     } catch {
       return jsonResponse(400, { error: "Invalid Slack payload." });
+    }
+    const actionId = payload.actions?.[0]?.action_id || "";
+    if (actionId.startsWith("knowledge_confirm_") || [
+      "knowledge_choose_existing_submit",
+      "knowledge_edit_submit"
+    ].includes(payload.view?.callback_id)) {
+      return handleSlackInteractivity(payload, context);
     }
     return handleInteraction(payload, context);
   }

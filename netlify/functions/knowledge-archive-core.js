@@ -214,6 +214,10 @@ export function slugifyTitle(title, fallbackSource = "") {
   return `${stamp}-${shortHash(`${title}:${fallbackSource}`)}`;
 }
 
+function genericProjectKey(value) {
+  return ["", "slack", "json", "markdown", "text", "memo", "note", "untitled"].includes(String(value || "").toLowerCase());
+}
+
 export function detectInputType(text, fileName = "") {
   const name = String(fileName || "").toLowerCase();
   if (name.endsWith(".json")) return "json";
@@ -288,7 +292,25 @@ export function buildAutoKnowledgePayload({ text, fileName = "", source = "slack
   const summary = String(firstNonEmpty(parsed.implementation_summary, parsed.summary, parsed.article_main_message, body.slice(0, 160)));
   const rawKnowledgeType = String(firstNonEmpty(parsed.knowledge_type, parsed.type, "notes"));
   const knowledgeType = knowledgeTypeFolders[rawKnowledgeType] ? rawKnowledgeType : "notes";
-  const projectKey = String(firstNonEmpty(parsed.project_key, parsed.slug, slugifyTitle(title, body)));
+  let projectKey = "";
+  let projectKeySource = "";
+  if (firstNonEmpty(parsed.project_key)) {
+    projectKey = String(parsed.project_key);
+    projectKeySource = "json.project_key";
+  } else {
+    projectKey = slugifyTitle(title, body);
+    projectKeySource = heading
+      ? "markdown_heading"
+      : parsed.project_title
+        ? "json.project_title"
+        : parsed.title
+          ? "json.title"
+          : "title_or_body_hash";
+  }
+  if (!firstNonEmpty(parsed.project_key) && genericProjectKey(projectKey)) {
+    projectKey = slugifyTitle("", body);
+    projectKeySource = "body_hash";
+  }
   const tools = extractKnownTools(body, parsed.tools_used || parsed.tools || "");
   const warnings = detectSensitiveWarnings(body);
 
@@ -296,6 +318,7 @@ export function buildAutoKnowledgePayload({ text, fileName = "", source = "slack
     title,
     knowledge_type: knowledgeType,
     project_key: projectKey,
+    project_key_source: projectKeySource,
     category,
     status,
     tools,
@@ -358,6 +381,7 @@ export function normalizeKnowledgePayload(input) {
     save_mode: String(input.save_mode || "upsert").trim(),
     source: String(input.source || "web").trim(),
     file_reference: String(input.file_reference || "").trim(),
+    project_key_source: String(input.project_key_source || "").trim(),
     slack_channel: String(input.slack_channel || "").trim(),
     slack_ts: String(input.slack_ts || "").trim(),
     slack_message_url: String(input.slack_message_url || "").trim(),
@@ -541,6 +565,7 @@ function buildMetadata(payload, created, updated, paths, existingMetadata = null
   return {
     title: payload.title,
     project_key: payload.project_key,
+    project_key_source: payload.project_key_source || existingMetadata?.project_key_source || "",
     knowledge_type: payload.knowledge_type,
     category: payload.category,
     status: payload.status,
@@ -723,6 +748,7 @@ export async function saveKnowledgeToGitHub(input) {
     title: payload.title,
     knowledge_type: payload.knowledge_type,
     project_key: payload.project_key,
+    project_key_source: metadata.project_key_source,
     save_mode: payload.save_mode,
     index_path: paths.indexPath,
     raw_json_path: metadata.raw_json_path,

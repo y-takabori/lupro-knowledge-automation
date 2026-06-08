@@ -214,6 +214,37 @@ function warningsText(warnings) {
   return Array.isArray(warnings) && warnings.length ? warnings.join(" / ") : "なし";
 }
 
+async function fetchSlackFileReference(reference) {
+  if (!reference) return "";
+  let url = reference;
+  if (/^F[A-Z0-9]+$/.test(reference)) {
+    const data = await slackApi("files.info", { file: reference });
+    url = data.file?.url_private_download || data.file?.url_private;
+  }
+  if (!/^https:\/\/files\.slack\.com\//.test(url)) {
+    throw new Error("SlackファイルIDまたはSlack private file URLを指定してください。");
+  }
+  const token = env("SLACK_BOT_TOKEN");
+  const response = await fetch(url, {
+    headers: { "Authorization": `Bearer ${token}` }
+  });
+  if (!response.ok) throw new Error("Slackファイル取得に失敗しました。");
+  return response.text();
+}
+
+async function postResponseUrl(responseUrl, text) {
+  if (!responseUrl) return;
+  await fetch(responseUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ response_type: "ephemeral", text })
+  }).catch(() => {});
+}
+
+function safeLog(message, details = {}) {
+  console.info(message, JSON.stringify(details));
+}
+
 function candidateText(candidates) {
   if (!candidates.length) return "なし";
   return candidates
@@ -240,11 +271,19 @@ function confirmationBlocks(pending) {
         `*推定ナレッジ種別:*\n${typeLabels[payload.knowledge_type] || payload.knowledge_type}`,
         `*推定カテゴリ:*\n${payload.category || "未分類"}`,
         `*推定保存キー:*\n${payload.project_key}`,
+        `*保存キー生成元:*\n${payload.project_key_source || "不明"}`,
         `*推定入力タイプ:*\n${inputLabels[payload.input_type] || payload.input_type}`,
         `*推定使用ツール:*\n${parseTools(payload.tools).join(", ") || "未取得"}`,
         `*公開時に注意が必要そうな情報:*\n${warningsText(payload.warnings)}`,
         `*類似ナレッジ候補:*\n${candidateText(pending.candidates || [])}`,
         `*おすすめ保存方法:*\n${recommendedText(pending.candidates || [])}`,
+        "",
+        "*ボタンの意味:*",
+        "新規保存: 新しいナレッジとして保存",
+        "おすすめに更新: Botが似ていると判断した既存ナレッジに追記",
+        "別の既存を選ぶ: 別の既存ナレッジを選んで更新",
+        "内容を編集: タイトルや保存キーを直してから保存",
+        "キャンセル: 保存しない",
         "",
         "この内容で保存しますか？"
       ].join("\n"))
@@ -302,6 +341,7 @@ function resultMessage(result, sheets) {
     `title: ${result.title}`,
     `knowledge_type: ${result.knowledge_type}`,
     `project_key: ${result.project_key}`,
+    `project_key_source: ${result.project_key_source || ""}`,
     `save_mode: ${result.save_mode}`,
     `GitHub index.md: ${result.index_url}`,
     `raw: ${result.raw_url || result.raw_json_url || result.raw_md_url || result.raw_txt_url}`,
@@ -350,6 +390,12 @@ async function createPendingFromEvent(body) {
   const dedupeKey = body.event_id || event.client_msg_id || `${event.channel}-${event.ts}`;
   const pendingKey = safePendingKey(`${event.channel}-${event.ts}`);
   const client = getGitHubClient();
+  safeLog("slack_event_received", {
+    event_id: body.event_id || "",
+    event_type: event.type,
+    channel: event.channel,
+    has_files: Array.isArray(event.files) && event.files.length > 0
+  });
   if (await client.getFile(eventPath(dedupeKey))) return;
   if (await client.getFile(pendingPath(pendingKey))) return;
 
@@ -484,6 +530,12 @@ function viewValue(state, blockId) {
 async function handleAction(payload) {
   const action = payload.actions?.[0];
   if (!action?.value) return;
+  safeLog("slack_interaction_received", {
+    type: payload.type,
+    action_id: action.action_id,
+    channel: payload.channel?.id || "",
+    user: payload.user?.id || ""
+  });
   const client = getGitHubClient();
   const pending = await readJsonFile(client, pendingPath(action.value), null);
   if (!pending || pending.status !== "pending") {
@@ -498,12 +550,20 @@ async function handleAction(payload) {
   }
 
   if (action.action_id === "knowledge_confirm_choose_existing") {
-    await openChooseModal(payload.trigger_id, pending);
+    try {
+      await openChooseModal(payload.trigger_id, pending);
+    } catch (error) {
+      await postThread(pending.channel, pending.thread_ts, `候補を取得できませんでした。\n${error.message}`);
+    }
     return;
   }
 
   if (action.action_id === "knowledge_confirm_edit") {
-    await openEditModal(payload.trigger_id, pending);
+    try {
+      await openEditModal(payload.trigger_id, pending);
+    } catch (error) {
+      await postThread(pending.channel, pending.thread_ts, `編集モーダルを開けませんでした。\n${error.message}`);
+    }
     return;
   }
 
@@ -523,9 +583,74 @@ async function handleAction(payload) {
     }
   }
 
-  const saved = await saveApprovedPending(pending, overrides);
-  await markPending(client, pending, "saved", { result: saved.result });
-  await postThread(pending.channel, pending.thread_ts, resultMessage(saved.result, saved.sheets));
+  try {
+    const saved = await saveApprovedPending(pending, overrides);
+    await markPending(client, pending, "saved", { result: saved.result });
+    await postThread(pending.channel, pending.thread_ts, resultMessage(saved.result, saved.sheets));
+  } catch (error) {
+    await postThread(pending.channel, pending.thread_ts, `保存に失敗しました。\n${error.message}`);
+  }
+}
+
+function modalValue(state, blockId, actionId = blockId) {
+  const item = state?.values?.[blockId]?.[actionId];
+  if (!item) return "";
+  if (item.type === "static_select") return item.selected_option?.value || "";
+  return item.value || "";
+}
+
+function modalSuccessMessage(result, sheets) {
+  const sheetsText = sheets?.ok
+    ? (sheets.url || "Sheets更新済み")
+    : sheets?.skipped
+      ? "Sheets未設定"
+      : sheets?.message
+        ? `Sheets更新失敗: ${sheets.message}`
+        : "Sheets未更新";
+  return [
+    "保存しました",
+    `title: ${result.title}`,
+    `knowledge_type: ${result.knowledge_type}`,
+    `project_key: ${result.project_key}`,
+    `save_mode: ${result.save_mode}`,
+    `index.md: ${result.index_url}`,
+    `raw: ${result.raw_url || result.raw_json_url || result.raw_md_url || result.raw_txt_url}`,
+    `Google Sheets: ${sheetsText}`,
+    `Web貼り付け画面: ${env("URL") || ""}/public/knowledge-ingest.html`
+  ].join("\n");
+}
+
+async function handleLegacyKnowledgeModal(payload) {
+  const privateMetadata = JSON.parse(payload.view.private_metadata || "{}");
+  const state = payload.view.state;
+  const fileReference = modalValue(state, "file_reference", "file_reference");
+  let body = modalValue(state, "body_short", "body_short");
+  if (fileReference) body = await fetchSlackFileReference(fileReference);
+  const savePayload = {
+    title: modalValue(state, "title", "title"),
+    knowledge_type: modalValue(state, "knowledge_type", "knowledge_type"),
+    project_key: modalValue(state, "project_key", "project_key"),
+    category: modalValue(state, "category", "category"),
+    status: modalValue(state, "status", "status"),
+    tools: modalValue(state, "tools", "tools"),
+    summary: modalValue(state, "summary", "summary"),
+    input_type: modalValue(state, "input_type", "input_type"),
+    save_mode: modalValue(state, "save_mode", "save_mode"),
+    body,
+    source: "slack"
+  };
+  try {
+    const result = await saveKnowledgeToGitHub(savePayload);
+    let sheets;
+    try {
+      sheets = await syncKnowledgeToGoogleSheets(savePayload, result);
+    } catch (error) {
+      sheets = { ok: false, skipped: false, message: error.message };
+    }
+    await postResponseUrl(privateMetadata.response_url || "", modalSuccessMessage(result, sheets));
+  } catch (error) {
+    await postResponseUrl(privateMetadata.response_url || "", `保存に失敗しました: ${error.message}`);
+  }
 }
 
 async function handleViewSubmission(payload) {
@@ -560,9 +685,33 @@ async function handleViewSubmission(payload) {
     };
   }
 
-  const saved = await saveApprovedPending(pending, overrides);
-  await markPending(client, pending, "saved", { result: saved.result });
-  await postThread(pending.channel, pending.thread_ts, resultMessage(saved.result, saved.sheets));
+  try {
+    const saved = await saveApprovedPending(pending, overrides);
+    await markPending(client, pending, "saved", { result: saved.result });
+    await postThread(pending.channel, pending.thread_ts, resultMessage(saved.result, saved.sheets));
+  } catch (error) {
+    await postThread(pending.channel, pending.thread_ts, `保存に失敗しました。\n${error.message}`);
+  }
+}
+
+export async function handleSlackInteractivity(payload, context) {
+  if (payload.type === "view_submission") {
+    const work = payload.view?.callback_id === "knowledge_save_modal"
+      ? handleLegacyKnowledgeModal(payload)
+      : handleViewSubmission(payload);
+    if (context?.waitUntil) context.waitUntil(work);
+    return jsonResponse(200, { response_action: "clear" });
+  }
+
+  const actionId = payload.actions?.[0]?.action_id || "";
+  if (actionId === "knowledge_confirm_choose_existing" || actionId === "knowledge_confirm_edit") {
+    await handleAction(payload);
+    return jsonResponse(200, {});
+  }
+
+  const work = handleAction(payload);
+  if (context?.waitUntil) context.waitUntil(work);
+  return jsonResponse(200, {});
 }
 
 export default async (request, context) => {
@@ -589,11 +738,7 @@ export default async (request, context) => {
     } catch {
       return jsonResponse(400, { error: "Invalid Slack payload." });
     }
-    const work = payload.type === "view_submission"
-      ? handleViewSubmission(payload)
-      : handleAction(payload);
-    if (context?.waitUntil) context.waitUntil(work);
-    return payload.type === "view_submission" ? jsonResponse(200, { response_action: "clear" }) : jsonResponse(200, {});
+    return handleSlackInteractivity(payload, context);
   }
 
   let body;

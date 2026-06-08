@@ -179,7 +179,7 @@ POST /.netlify/functions/slack-knowledge
 POST /.netlify/functions/save-knowledge-github
 ```
 
-`slack-knowledge` はSlack Slash commandとInteractivity用です。Slack署名を `SLACK_SIGNING_SECRET` で検証します。`save-knowledge-github` はWeb貼り付け画面用で、`Authorization: Bearer ${KNOWLEDGE_SAVE_TOKEN}` が必要です。
+`slack-knowledge` はSlack Slash command `/knowledge-save` 用です。保存前確認ボタンやモーダル送信などのInteractivityは `slack-events` を推奨します。どちらもSlack署名を `SLACK_SIGNING_SECRET` で検証します。`save-knowledge-github` はWeb貼り付け画面用で、`Authorization: Bearer ${KNOWLEDGE_SAVE_TOKEN}` が必要です。
 
 ### 保存先構成
 
@@ -219,7 +219,7 @@ knowledge/
 https://YOUR-NETLIFY-SITE.netlify.app/.netlify/functions/slack-knowledge
 ```
 
-Interactivity & Shortcutsを有効化し、Request URLにも同じURLを設定します。可能であればMessage Shortcut「ナレッジ化する」を追加します。このFunctionは `message_action` を受けると、メッセージ本文を短文欄に入れたモーダルを開きます。
+Interactivity & Shortcutsを有効化し、Request URLには `/.netlify/functions/slack-events` を設定します。可能であればMessage Shortcut「ナレッジ化する」を追加します。
 
 推奨Slack OAuth scopes:
 
@@ -478,3 +478,19 @@ Bot自身の投稿、保存完了通知、確認メッセージへのスレッ�
 - `キャンセル` で本保存・Sheets更新が行われない
 - plain_textは `raw.txt`、JSONは `raw.json`、Markdownは `raw.md` のリンクが返る
 - 壊れたJSONは `raw.txt` 保存になりwarningが残る
+
+## Slack URL設定の整理
+
+現在の推奨設定は以下です。
+
+| Slack設定 | Request URL |
+| --- | --- |
+| Slash command `/knowledge-save` | `https://lupro-knowledge-automation.netlify.app/.netlify/functions/slack-knowledge` |
+| Event Subscriptions | `https://lupro-knowledge-automation.netlify.app/.netlify/functions/slack-events` |
+| Interactivity & Shortcuts | `https://lupro-knowledge-automation.netlify.app/.netlify/functions/slack-events` |
+
+保存前確認メッセージのボタン、既存選択プルダウン、編集モーダルは `slack-events` で処理します。`/knowledge-save` のSlash commandは `slack-knowledge` がモーダルを開きますが、モーダル送信先はSlackアプリ全体のInteractivity URLに送られるため、`slack-events` 側でも既存モーダル送信を処理できるようにしています。
+
+互換性のため、Interactivity URLが古い `slack-knowledge` のままでも確認ボタンpayloadは `slack-events` のhandlerへルーティングします。ただし運用上はInteractivity URLを `slack-events` に統一してください。
+
+Netlify Function logsでは、ボタン押下時に `slack_interaction_received`、通常投稿受信時に `slack_event_received` を出します。ログには `action_id`, `channel`, `user`, `event_id` などの識別情報だけを出し、APIキー、token、環境変数の実値は出しません。
