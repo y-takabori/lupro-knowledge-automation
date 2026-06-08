@@ -1,7 +1,7 @@
 {
   "pending_key": "C0B8YN010J2-1780959488.632229",
   "dedupe_key": "Ev0BA02XPS0G",
-  "status": "pending",
+  "status": "saved",
   "created_at": "2026-06-08T22:58:10.952Z",
   "channel": "C0B8YN010J2",
   "thread_ts": "1780959488.632229",
@@ -66,5 +66,28 @@
       "similar_reason": "カテゴリが近い / 本文の語句が近い"
     }
   ],
-  "confirmation_message_ts": "1780959491.725999"
+  "confirmation_message_ts": "1780959491.725999",
+  "updated_at": "2026-06-08T22:58:57.180Z",
+  "result": {
+    "message": "Saved knowledge to GitHub.",
+    "title": "Slack確認カード改善テスト",
+    "knowledge_type": "notes",
+    "project_key": "20260609-0758-12345b5e",
+    "project_key_source": "body_hash",
+    "save_mode": "new",
+    "index_path": "knowledge/notes/20260609-0758-12345b5e/index.md",
+    "raw_json_path": "knowledge/notes/20260609-0758-12345b5e/raw.json",
+    "raw_md_path": "knowledge/notes/20260609-0758-12345b5e/raw.md",
+    "raw_txt_path": "knowledge/notes/20260609-0758-12345b5e/raw.txt",
+    "raw_path": "knowledge/notes/20260609-0758-12345b5e/raw.md",
+    "metadata_path": "knowledge/notes/20260609-0758-12345b5e/metadata.json",
+    "created": "2026-06-09T07:58:53+09:00",
+    "updated": "2026-06-09T07:58:53+09:00",
+    "index_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/20260609-0758-12345b5e/index.md",
+    "raw_json_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/20260609-0758-12345b5e/raw.json",
+    "raw_md_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/20260609-0758-12345b5e/raw.md",
+    "raw_txt_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/20260609-0758-12345b5e/raw.txt",
+    "raw_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/20260609-0758-12345b5e/raw.md",
+    "json_parse_warning": ""
+  }
 }
