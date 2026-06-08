@@ -1,0 +1,69 @@
+{
+  "pending_key": "C0B8YN010J2-1780959488.632229",
+  "dedupe_key": "Ev0BA02XPS0G",
+  "status": "pending",
+  "created_at": "2026-06-08T22:58:10.952Z",
+  "channel": "C0B8YN010J2",
+  "thread_ts": "1780959488.632229",
+  "user": "U08H3PUHUAX",
+  "payload": {
+    "title": "Slack確認カード改善テスト",
+    "knowledge_type": "notes",
+    "project_key": "20260609-0758-12345b5e",
+    "project_key_source": "body_hash",
+    "category": "未分類",
+    "status": "saved",
+    "tools": [
+      "ChatGPT",
+      "Codex",
+      "GitHub",
+      "Netlify",
+      "Slack"
+    ],
+    "summary": "# Slack確認カード改善テスト\n\nSlackに投稿した内容を、保存前に確認し、必要に応じて新規保存・既存追記・キャンセルできるか確認しています。\n\n目的：\nナレッジ保存前に人間が確認できるようにし、誤保存や誤更新を防ぐこと。\n\n使用ツール：\nChatGPT, Codex, Slack, GitHub, Netlif",
+    "input_type": "markdown",
+    "body": "# Slack確認カード改善テスト\n\nSlackに投稿した内容を、保存前に確認し、必要に応じて新規保存・既存追記・キャンセルできるか確認しています。\n\n目的：\nナレッジ保存前に人間が確認できるようにし、誤保存や誤更新を防ぐこと。\n\n使用ツール：\nChatGPT, Codex, Slack, GitHub, Netlify",
+    "save_mode": "upsert",
+    "source": "slack_event",
+    "slack_channel": "C0B8YN010J2",
+    "slack_ts": "1780959488.632229",
+    "slack_message_url": "",
+    "slack_event_id": "Ev0BA02XPS0G",
+    "json_parse_warning": "",
+    "warnings": [],
+    "extracted": {
+      "private_or_sensitive_info_to_hide": [],
+      "media_theme": "",
+      "article_main_message": "",
+      "content_strategy": "",
+      "wordpress_article_angles": "",
+      "note_article_angles": "",
+      "x_threads_post_ideas": ""
+    }
+  },
+  "candidates": [
+    {
+      "title": "Slack自動保存テストです。",
+      "project_key": "slack",
+      "knowledge_type": "notes",
+      "category": "未分類",
+      "status": "saved",
+      "tools": [
+        "ChatGPT",
+        "Codex",
+        "GitHub",
+        "Slack"
+      ],
+      "summary": "Slack自動保存テストです。\nChatGPTとCodexを使って、Slack投稿をGitHubにナレッジ保存できるか確認しています。",
+      "path": "knowledge/notes/slack/index.md",
+      "raw_json_path": "knowledge/notes/slack/raw.json",
+      "raw_md_path": "knowledge/notes/slack/raw.md",
+      "raw_txt_path": "knowledge/notes/slack/raw.txt",
+      "raw_path": "knowledge/notes/slack/raw.txt",
+      "created": "2026-06-08T22:15:57+09:00",
+      "updated": "2026-06-08T22:15:57+09:00",
+      "score": 4,
+      "similar_reason": "カテゴリが近い / 本文の語句が近い"
+    }
+  ]
+}
