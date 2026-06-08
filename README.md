@@ -398,3 +398,83 @@ npm run check
 - Google Sheets環境変数がある場合は該当シートに行が追加または更新される
 - bot自身の保存完了通知には反応しない
 - 同じSlackイベントで二重保存されない
+
+## Slack投稿の保存前確認フロー
+
+Slackのナレッジ登録チャンネルに投稿された本文やファイルは、即GitHub本保存・Google Sheets更新されません。`/.netlify/functions/slack-events` が投稿を解析し、まず元投稿のスレッドに「ナレッジ候補を読み取りました。まだ保存していません。」という確認メッセージを返します。ユーザーがSlackボタンまたは編集モーダルで承認した場合だけ、GitHub保存とGoogle Sheets更新を実行します。
+
+### Slack設定
+
+Event SubscriptionsのRequest URL:
+
+```text
+https://YOUR-NETLIFY-SITE.netlify.app/.netlify/functions/slack-events
+```
+
+Interactivity & ShortcutsのRequest URLも、確認ボタンを使うSlackアプリでは以下にしてください。
+
+```text
+https://YOUR-NETLIFY-SITE.netlify.app/.netlify/functions/slack-events
+```
+
+既存の `/knowledge-save` モーダルを使う場合は、Slash commandのRequest URLは引き続き `/.netlify/functions/slack-knowledge` で利用できます。
+
+Subscribe to bot events:
+
+- `message.channels`
+- privateチャンネルでも使う場合は `message.groups`
+
+推奨OAuth scopes:
+
+- `commands`
+- `chat:write`
+- `files:read`
+- `channels:history`
+- `groups:history`
+- `links:read`
+
+対象チャンネルを限定する場合は `SLACK_KNOWLEDGE_CHANNEL_ID` にチャンネルIDを設定してください。
+
+### pending保存
+
+確認待ちデータはGitHubの以下へ一時保存します。
+
+```text
+knowledge/.pending/{channel}-{ts}.json
+```
+
+pendingには推定メタデータ、原文、Slack channel/ts/message URL、類似ナレッジ候補、警告情報を保存します。この時点では `knowledge/{type}/{project_key}/index.md`、rawファイル、`knowledge/index.json`、Google Sheetsは更新しません。
+
+保存完了またはキャンセル後はpendingの `status` を `saved` または `cancelled` に更新し、重複イベント防止のため以下へ処理済みマーカーを残します。
+
+```text
+knowledge/.events/{event_id または client_msg_id}.json
+```
+
+### 確認ボタンの挙動
+
+- `新規保存`: 推定値のまま `save_mode=new` でGitHub本保存し、Sheets更新を試みます。
+- `おすすめに更新`: `knowledge/index.json` から推定した最上位の類似ナレッジへ `save_mode=update` で追記します。類似候補がない場合は新規保存として扱います。
+- `別の既存を選ぶ`: 既存ナレッジのプルダウンを出し、選択した `knowledge_type/project_key` へ更新保存します。
+- `内容を編集`: 推定タイトル、project_key、種別、カテゴリ、ステータス、使用ツール、概要、保存モード、更新対象project_keyを編集できるモーダルを開きます。送信後に保存します。
+- `キャンセル`: GitHub本保存・Google Sheets更新を行わず、pendingを `cancelled` にします。
+
+### 類似候補とproject_key
+
+投稿内に `project_key` があれば優先します。`project_title` / `title` / Markdownの `# 見出し` があればタイトルとして使います。既存候補は `knowledge/index.json` の `title`, `project_key`, `summary`, `category` を簡易比較し、最大3件表示します。日本語タイトルなどslug化しにくい場合は `YYYYMMDD-HHmm-短いhash` 形式で `project_key` を生成します。
+
+### 事故防止
+
+Bot自身の投稿、保存完了通知、確認メッセージへのスレッド返信、重複Slackイベントには反応しません。APIキー、token、メールアドレス、金額、顧客名らしき文字列は削除せず原文保存しますが、pendingとmetadataのwarning、および保存前確認メッセージの「公開時に注意が必要そうな情報」に表示します。
+
+### 確認項目
+
+- Slack通常投稿時に即保存されず、スレッドに保存前確認が出る
+- 確認メッセージに「まだ保存していません」と表示される
+- `新規保存` でGitHub本保存とSheets更新が走る
+- 類似候補がある場合に `おすすめに更新` で既存へ追記できる
+- `別の既存を選ぶ` でプルダウン選択できる
+- `内容を編集` で推定値を編集できる
+- `キャンセル` で本保存・Sheets更新が行われない
+- plain_textは `raw.txt`、JSONは `raw.json`、Markdownは `raw.md` のリンクが返る
+- 壊れたJSONは `raw.txt` 保存になりwarningが残る

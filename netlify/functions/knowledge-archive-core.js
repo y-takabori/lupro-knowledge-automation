@@ -209,8 +209,9 @@ export function slugifyTitle(title, fallbackSource = "") {
     .replace(/^-+|-+$/g, "")
     .slice(0, 70);
   if (ascii) return ascii;
-  const date = nowJst().slice(0, 10).replaceAll("-", "");
-  return `${date}-${shortHash(`${title}:${fallbackSource}`)}`;
+  const current = nowJst();
+  const stamp = `${current.slice(0, 10).replaceAll("-", "")}-${current.slice(11, 16).replace(":", "")}`;
+  return `${stamp}-${shortHash(`${title}:${fallbackSource}`)}`;
 }
 
 export function detectInputType(text, fileName = "") {
