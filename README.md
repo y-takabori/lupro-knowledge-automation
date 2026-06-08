@@ -290,3 +290,111 @@ npm run check
 ```
 
 追加確認として、`/knowledge-save` でモーダルが開くこと、短文保存で `knowledge/{folder}/{project_key}/index.md` が作成されること、JSON入力で `raw.json` が保存されること、同じ `project_key` の `update` で `updates/` 配下に追記ファイルが作成されること、`knowledge/index.json` が作成・更新されること、Slackに短い保存完了通知が返ることを確認してください。
+
+## Slack投稿自動保存とGoogle Sheets一覧連携
+
+Slackの「ナレッジ登録」チャンネルに長文JSON、Markdown、通常テキスト、`.json` / `.md` / `.txt` 添付を投稿すると、Slack Events経由でGitHubへ保存し、可能であればGoogleスプレッドシートにも一覧を追加・更新します。既存の `/knowledge-save` モーダルとWeb貼り付け画面は引き続き利用できます。
+
+### Slack Event Subscriptions
+
+Request URL:
+
+```text
+https://YOUR-NETLIFY-SITE.netlify.app/.netlify/functions/slack-events
+```
+
+`url_verification` のchallengeに対応しています。Subscribe to bot eventsにはまず以下を設定してください。
+
+- `message.channels`
+- ファイル付き投稿を扱う場合は `file_shared` も追加候補
+
+推奨OAuth scopes:
+
+- `commands`
+- `chat:write`
+- `files:read`
+- `channels:history`
+- `links:read`
+
+ナレッジ登録チャンネルだけを対象にする場合は、Netlify環境変数 `SLACK_KNOWLEDGE_CHANNEL_ID` に対象チャンネルIDを設定してください。未設定の場合は、Botが受け取れるメッセージイベントを処理対象にします。Bot自身の投稿、`bot_message`、保存完了通知には反応しません。
+
+### 自動判定ルール
+
+投稿本文または添付ファイル名から `json`, `markdown`, `plain_text`, `url` を判定します。JSONはスマートクォートを通常のダブルクォートに寄せ、コードフェンスを除去し、先頭の `{` から末尾の `}` までを抽出してパースします。壊れたJSONはエラー終了せず、原文を `raw.txt` に保存し、Slackには「JSONとしては壊れていますが、原文保存しました」と通知します。
+
+Markdownは `raw.md`、通常テキストとファイル本文は `raw.txt`、JSONは `raw.json` に保存します。Slack通知のrawリンクも入力タイプに応じて正しいファイルURLを返します。
+
+### 自動抽出されるメタデータ
+
+JSONに以下のキーがあれば優先します。
+
+- `project_title` / `title`
+- `project_category` / `category`
+- `status`
+- `tools_used`
+- `implementation_summary` / `summary`
+- `created_at`
+- `updated_at`
+- `private_or_sensitive_info_to_hide`
+- `media_theme`
+- `article_main_message`
+- `content_strategy`
+- `wordpress_article_angles`
+- `note_article_angles`
+- `x_threads_post_ideas`
+
+取得できない場合、タイトルは先頭見出しまたは冒頭50文字程度、`project_key` はslug化、slug化できない日本語タイトルは `yyyyMMdd-hash`、カテゴリは「未分類」、ステータスは `saved`、ナレッジ種別は `notes` にします。本文中に `ChatGPT`, `Codex`, `GitHub`, `Netlify`, `Slack`, `Notion`, `Google Sheets`, `WordPress`, `note`, `X`, `Threads` が含まれる場合は使用ツールとして抽出します。
+
+### Google Sheets連携
+
+Google Sheets APIはサービスアカウント方式を想定しています。対象スプレッドシートをサービスアカウントのメールアドレスへ共有してください。
+
+必要なNetlify環境変数:
+
+| 変数名 | 用途 |
+| --- | --- |
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | サービスアカウントのclient email |
+| `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` | サービスアカウント秘密鍵。`\n` はFunction内で改行に復元 |
+| `GOOGLE_SHEETS_SPREADSHEET_ID` | 一覧を保存するSpreadsheet ID |
+| `GOOGLE_SHEETS_WORKSHEET_NAME` | シート名。未設定時は `knowledge` |
+
+想定列:
+
+作成日、更新日、タイトル、保存キー、ナレッジ種別、カテゴリ、ステータス、使用ツール、概要、GitHub index URL、raw URL、source、Slack channel、Slack message URL、note展開候補、WordPress展開候補、X/Threads展開候補、公開時に伏せる情報、次にやること
+
+Sheets環境変数が未設定、またはSheets API更新に失敗した場合でも、GitHub保存が成功していれば全体失敗にはしません。Slackには「GitHub保存成功 / Sheets更新失敗」または「Sheets未設定」と分けて通知します。
+
+### 重複保存防止
+
+Slackの `event_id`、なければ `client_msg_id`、さらに `channel-ts` を使い、`knowledge/.events/{dedupeKey}.json` をGitHubに保存して処理済みマーカーにします。同じSlackイベントの再送では二重保存しません。
+
+### セキュリティ注意点
+
+Slack署名検証は `SLACK_SIGNING_SECRET` で必ず行います。APIキー、token、secret、メールアドレス、金額、顧客名らしき文字列が本文に含まれる場合は `metadata.json` の `warnings` と `private_or_sensitive_info_to_hide` に注意喚起を残します。ただし原文は勝手に削除せず、GitHub Privateリポジトリに保存します。公開記事化前に必ず人間が確認してください。
+
+### エラー時の確認
+
+- Slackに「必要な環境変数が不足しています」と出る場合はNetlify環境変数を確認
+- 「GitHub保存に失敗しました」と出る場合は `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_BRANCH` とFine-grained tokenの `Contents: Read and write` を確認
+- 「ファイル取得に失敗しました」と出る場合は `SLACK_BOT_TOKEN` と `files:read`、またはWeb貼り付け画面を利用
+- 「Sheets更新失敗」と出る場合はサービスアカウントの共有設定、Sheets API、`GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` の改行復元を確認
+
+### 追加確認手順
+
+```bash
+npm run check
+```
+
+確認項目:
+
+- 既存の `/knowledge-save` モーダルが開く
+- plain_text保存時に `raw.txt` リンクが出る
+- JSON保存時に `raw.json` リンクが出る
+- Slackチャンネルに短文を投稿しただけで保存される
+- SlackチャンネルにJSONを貼っただけで保存される
+- 壊れたJSONは `raw.txt` として保存され、エラーではなく警告になる
+- `knowledge/index.json` が更新される
+- Google Sheets環境変数がない場合でもGitHub保存は成功する
+- Google Sheets環境変数がある場合は該当シートに行が追加または更新される
+- bot自身の保存完了通知には反応しない
+- 同じSlackイベントで二重保存されない

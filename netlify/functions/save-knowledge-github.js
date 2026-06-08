@@ -1,4 +1,5 @@
 import { jsonResponse, env, saveKnowledgeToGitHub } from "./knowledge-archive-core.js";
+import { syncKnowledgeToGoogleSheets } from "./google-sheets-sync.js";
 
 function checkAuthorization(request) {
   const expectedToken = env("KNOWLEDGE_SAVE_TOKEN");
@@ -39,7 +40,20 @@ export default async (request) => {
       ...payload,
       source: payload.source || "web"
     });
-    return jsonResponse(200, result);
+    let sheets = null;
+    try {
+      sheets = await syncKnowledgeToGoogleSheets(payload, result);
+    } catch (error) {
+      sheets = {
+        ok: false,
+        skipped: false,
+        message: error.message
+      };
+    }
+    return jsonResponse(200, {
+      ...result,
+      sheets
+    });
   } catch (error) {
     return jsonResponse(error.status || 502, {
       error: "Failed to save knowledge to GitHub.",

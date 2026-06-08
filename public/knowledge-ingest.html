@@ -208,6 +208,7 @@
             <option value="json">json</option>
             <option value="plain_text">plain_text</option>
             <option value="url">url</option>
+            <option value="file">file</option>
           </select>
         </label>
         <label>
@@ -293,7 +294,8 @@
           knowledge_type: ${escapeHtml(data.knowledge_type)}<br>
           project_key: ${escapeHtml(data.project_key)}<br>
           index.md: <a href="${escapeHtml(data.index_url)}" target="_blank" rel="noreferrer">${escapeHtml(data.index_url)}</a><br>
-          raw: <a href="${escapeHtml(data.raw_json_url || data.raw_txt_url)}" target="_blank" rel="noreferrer">${escapeHtml(data.raw_json_url || data.raw_txt_url)}</a>
+          raw: <a href="${escapeHtml(data.raw_url || data.raw_json_url || data.raw_md_url || data.raw_txt_url)}" target="_blank" rel="noreferrer">${escapeHtml(data.raw_url || data.raw_json_url || data.raw_md_url || data.raw_txt_url)}</a><br>
+          Google Sheets: ${escapeHtml(data.sheets?.ok ? (data.sheets.url || "Sheets更新済み") : data.sheets?.skipped ? "Sheets未設定" : data.sheets?.message || "Sheets未更新")}
         `);
       } catch (error) {
         show("error", `<strong>保存に失敗しました。</strong><br>${escapeHtml(error.message)}`);

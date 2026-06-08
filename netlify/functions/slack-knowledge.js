@@ -5,9 +5,52 @@ import {
   saveKnowledgeToGitHub,
   verifySlackSignature
 } from "./knowledge-archive-core.js";
+import { syncKnowledgeToGoogleSheets } from "./google-sheets-sync.js";
 
-const statusOptions = ["draft", "saved", "active", "article_candidate", "published", "archived"];
-const inputTypeOptions = ["markdown", "json", "plain_text", "url"];
+const knowledgeTypeLabels = {
+  learnings: "学び・気づき",
+  projects: "プロジェクト",
+  tools: "ツール",
+  strategy: "戦略・方針",
+  content: "記事・発信",
+  memo: "メモ",
+  notes: "ノート",
+  content_strategy: "コンテンツ方針",
+  marketing: "マーケティング",
+  sales: "営業",
+  operations: "業務改善",
+  client_work: "顧客提案",
+  internal_rules: "社内ルール",
+  other: "その他"
+};
+
+const statusLabels = {
+  saved: "保存済み",
+  draft: "下書き",
+  in_progress: "進行中",
+  active: "運用中",
+  completed: "完了",
+  article_candidate: "記事候補",
+  published: "公開済み",
+  archived: "アーカイブ"
+};
+
+const inputTypeLabels = {
+  plain_text: "通常テキスト",
+  markdown: "Markdown",
+  json: "JSON",
+  url: "URL",
+  file: "ファイル"
+};
+
+const saveModeLabels = {
+  new: "新規作成",
+  update: "更新追記",
+  upsert: "新規または更新"
+};
+
+const statusOptions = ["draft", "saved", "in_progress", "active", "completed", "article_candidate", "published", "archived"];
+const inputTypeOptions = ["plain_text", "markdown", "json", "url", "file"];
 const saveModeOptions = ["new", "update", "upsert"];
 
 function slackText(text) {
@@ -23,7 +66,7 @@ function option(value, label = value) {
 
 async function slackApi(method, body) {
   const token = env("SLACK_BOT_TOKEN");
-  if (!token) throw new Error("Missing SLACK_BOT_TOKEN.");
+  if (!token) throw new Error("SLACK_BOT_TOKEN が未設定です。");
   const response = await fetch(`https://slack.com/api/${method}`, {
     method: "POST",
     headers: {
@@ -37,68 +80,6 @@ async function slackApi(method, body) {
     throw new Error(data.error || `Slack API ${method} failed.`);
   }
   return data;
-}
-
-function buildModal(privateMetadata = {}) {
-  const initialBody = privateMetadata.body_short || "";
-  return {
-    type: "modal",
-    callback_id: "knowledge_save_modal",
-    private_metadata: JSON.stringify(privateMetadata),
-    title: slackText("LUPRO Knowledge"),
-    submit: slackText("保存"),
-    close: slackText("キャンセル"),
-    blocks: [
-      inputBlock("title", "title", "タイトル", "plain_text_input"),
-      {
-        type: "input",
-        block_id: "knowledge_type",
-        label: slackText("ナレッジ種別"),
-        element: {
-          type: "static_select",
-          action_id: "knowledge_type",
-          options: Object.keys(knowledgeTypeFolders).map((type) => option(type))
-        }
-      },
-      inputBlock("project_key", "project_key", "保存キー", "plain_text_input", "invoice-ai-assistant"),
-      inputBlock("category", "category", "カテゴリ", "plain_text_input", "AI業務効率化"),
-      {
-        type: "input",
-        block_id: "status",
-        label: slackText("ステータス"),
-        element: {
-          type: "static_select",
-          action_id: "status",
-          options: statusOptions.map((status) => option(status))
-        }
-      },
-      inputBlock("tools", "tools", "使用ツール。カンマ区切り", "plain_text_input", "ChatGPT, Codex"),
-      inputBlock("summary", "summary", "概要", "plain_text_input"),
-      {
-        type: "input",
-        block_id: "input_type",
-        label: slackText("入力タイプ"),
-        element: {
-          type: "static_select",
-          action_id: "input_type",
-          options: inputTypeOptions.map((type) => option(type))
-        }
-      },
-      inputBlock("body_short", "body_short", "短めの本文・メモ", "plain_text_input", "", true, initialBody),
-      inputBlock("file_reference", "file_reference", "SlackファイルURLまたはファイルID", "plain_text_input", "任意。長文ファイル用", true),
-      {
-        type: "input",
-        block_id: "save_mode",
-        label: slackText("保存モード"),
-        element: {
-          type: "static_select",
-          action_id: "save_mode",
-          initial_option: option("upsert"),
-          options: saveModeOptions.map((mode) => option(mode))
-        }
-      }
-    ]
-  };
 }
 
 function inputBlock(blockId, actionId, label, type, placeholder = "", optional = false, initialValue = "") {
@@ -120,6 +101,70 @@ function inputBlock(blockId, actionId, label, type, placeholder = "", optional =
   };
 }
 
+function buildModal(privateMetadata = {}) {
+  const initialBody = privateMetadata.body_short || "";
+  return {
+    type: "modal",
+    callback_id: "knowledge_save_modal",
+    private_metadata: JSON.stringify(privateMetadata),
+    title: slackText("ナレッジ保存"),
+    submit: slackText("保存"),
+    close: slackText("キャンセル"),
+    blocks: [
+      inputBlock("title", "title", "タイトル", "plain_text_input"),
+      {
+        type: "input",
+        block_id: "knowledge_type",
+        label: slackText("ナレッジ種別"),
+        element: {
+          type: "static_select",
+          action_id: "knowledge_type",
+          options: Object.keys(knowledgeTypeFolders).map((type) => option(type, knowledgeTypeLabels[type] || type))
+        }
+      },
+      inputBlock("project_key", "project_key", "保存キー", "plain_text_input", "invoice-ai-assistant"),
+      inputBlock("category", "category", "カテゴリ", "plain_text_input", "未分類"),
+      {
+        type: "input",
+        block_id: "status",
+        label: slackText("ステータス"),
+        element: {
+          type: "static_select",
+          action_id: "status",
+          initial_option: option("saved", statusLabels.saved),
+          options: statusOptions.map((status) => option(status, statusLabels[status] || status))
+        }
+      },
+      inputBlock("tools", "tools", "使用ツール。カンマ区切り", "plain_text_input", "ChatGPT, Codex"),
+      inputBlock("summary", "summary", "概要", "plain_text_input"),
+      {
+        type: "input",
+        block_id: "input_type",
+        label: slackText("入力タイプ"),
+        element: {
+          type: "static_select",
+          action_id: "input_type",
+          initial_option: option("plain_text", inputTypeLabels.plain_text),
+          options: inputTypeOptions.map((type) => option(type, inputTypeLabels[type] || type))
+        }
+      },
+      inputBlock("body_short", "body_short", "短めの本文・メモ", "plain_text_input", "", true, initialBody),
+      inputBlock("file_reference", "file_reference", "SlackファイルURLまたはファイルID", "plain_text_input", "任意。長文ファイル用", true),
+      {
+        type: "input",
+        block_id: "save_mode",
+        label: slackText("保存モード"),
+        element: {
+          type: "static_select",
+          action_id: "save_mode",
+          initial_option: option("upsert", saveModeLabels.upsert),
+          options: saveModeOptions.map((mode) => option(mode, saveModeLabels[mode] || mode))
+        }
+      }
+    ]
+  };
+}
+
 function getValue(state, blockId, actionId) {
   const item = state?.values?.[blockId]?.[actionId];
   if (!item) return "";
@@ -130,14 +175,14 @@ function getValue(state, blockId, actionId) {
 async function fetchSlackFile(reference) {
   if (!reference) return "";
   const token = env("SLACK_BOT_TOKEN");
-  if (!token) throw new Error("Missing SLACK_BOT_TOKEN.");
+  if (!token) throw new Error("SLACK_BOT_TOKEN が未設定です。");
   let url = reference;
   if (/^F[A-Z0-9]+$/.test(reference)) {
     const data = await slackApi("files.info", { file: reference });
     url = data.file?.url_private_download || data.file?.url_private;
   }
   if (!/^https:\/\/files\.slack\.com\//.test(url)) {
-    throw new Error("Slack file reference must be a Slack file ID or private Slack file URL.");
+    throw new Error("SlackファイルIDまたはSlack private file URLを指定してください。");
   }
   const response = await fetch(url, {
     headers: {
@@ -145,7 +190,7 @@ async function fetchSlackFile(reference) {
     }
   });
   if (!response.ok) {
-    throw new Error("Failed to download Slack file.");
+    throw new Error("Slackファイル取得に失敗しました。Web貼り付け画面を使ってください。");
   }
   return response.text();
 }
@@ -183,7 +228,14 @@ async function postResponse(responseUrl, text) {
 }
 
 function successMessage(result) {
-  const rawUrl = result.raw_json_url || result.raw_txt_url;
+  const rawUrl = result.raw_url || result.raw_json_url || result.raw_md_url || result.raw_txt_url;
+  const sheetsText = result.sheets?.ok
+    ? (result.sheets.url || "Sheets更新済み")
+    : result.sheets?.skipped
+      ? "Sheets未設定"
+      : result.sheets?.message
+        ? `Sheets更新失敗: ${result.sheets.message}`
+        : "Sheets未更新";
   return [
     "保存しました",
     `title: ${result.title}`,
@@ -192,12 +244,13 @@ function successMessage(result) {
     `save_mode: ${result.save_mode}`,
     `index.md: ${result.index_url}`,
     `raw: ${rawUrl}`,
+    `Google Sheets: ${sheetsText}`,
     `Web貼り付け画面: ${env("URL") || ""}/public/knowledge-ingest.html`
   ].filter(Boolean).join("\n");
 }
 
 function errorMessage(error) {
-  return `保存に失敗しました: ${error.message || "unknown error"}`;
+  return `保存に失敗しました: ${error.message || "不明なエラーです。環境変数とGitHub/Slack権限を確認してください。"}`;
 }
 
 async function processSave(payload, responseUrl) {
@@ -210,7 +263,17 @@ async function processSave(payload, responseUrl) {
       ...payload,
       body
     });
-    await postResponse(responseUrl, successMessage(result));
+    let sheets = null;
+    try {
+      sheets = await syncKnowledgeToGoogleSheets(payload, result);
+    } catch (error) {
+      sheets = {
+        ok: false,
+        skipped: false,
+        message: error.message
+      };
+    }
+    await postResponse(responseUrl, successMessage({ ...result, sheets }));
   } catch (error) {
     await postResponse(responseUrl, errorMessage(error));
   }

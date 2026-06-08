@@ -6,7 +6,7 @@
   "description": "Save fixed LUPRO practical knowledge JSON into a Notion database via Netlify Functions.",
   "scripts": {
     "create:notion-db": "node scripts/create-notion-database.js",
-    "check": "node --check scripts/create-notion-database.js && node --check netlify/functions/save-lupro-knowledge.js && node --check netlify/functions/create-notion-database.js && node --check netlify/functions/knowledge-archive-core.js && node --check netlify/functions/save-knowledge-github.js && node --check netlify/functions/slack-knowledge.js",
+    "check": "node --check scripts/create-notion-database.js && node --check netlify/functions/save-lupro-knowledge.js && node --check netlify/functions/create-notion-database.js && node --check netlify/functions/knowledge-archive-core.js && node --check netlify/functions/google-sheets-sync.js && node --check netlify/functions/save-knowledge-github.js && node --check netlify/functions/slack-knowledge.js && node --check netlify/functions/slack-events.js",
     "dev": "npx netlify dev"
   },
   "engines": {

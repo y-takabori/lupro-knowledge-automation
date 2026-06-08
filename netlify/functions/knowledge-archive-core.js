@@ -2,6 +2,10 @@ import crypto from "node:crypto";
 
 export const knowledgeTypeFolders = {
   tools: "tools",
+  strategy: "strategy",
+  content: "content",
+  memo: "memo",
+  notes: "notes",
   content_strategy: "content-strategy",
   projects: "projects",
   marketing: "marketing",
@@ -17,13 +21,15 @@ const statuses = new Set([
   "draft",
   "saved",
   "active",
+  "in_progress",
+  "completed",
   "article_candidate",
   "published",
   "archived"
 ]);
 
 const saveModes = new Set(["new", "update", "upsert"]);
-const inputTypes = new Set(["markdown", "json", "plain_text", "url"]);
+const inputTypes = new Set(["markdown", "json", "plain_text", "url", "file"]);
 
 const jsonMarkdownFields = [
   ["background_issue", "背景"],
@@ -142,6 +148,181 @@ export function formatValue(value, indent = "") {
   return String(value);
 }
 
+export function stripCodeFences(text) {
+  return String(text || "")
+    .trim()
+    .replace(/^```(?:json|markdown|md)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
+
+export function normalizeSmartQuotes(text) {
+  return String(text || "")
+    .replaceAll("\u201c", "\"")
+    .replaceAll("\u201d", "\"")
+    .replaceAll("\u201e", "\"")
+    .replaceAll("\u201f", "\"")
+    .replaceAll("\u301d", "\"")
+    .replaceAll("\u301e", "\"")
+    .replaceAll("\u2018", "'")
+    .replaceAll("\u2019", "'");
+}
+
+export function extractJsonCandidate(text) {
+  const normalized = normalizeSmartQuotes(stripCodeFences(text));
+  const start = normalized.indexOf("{");
+  const end = normalized.lastIndexOf("}");
+  if (start === -1 || end === -1 || start > end) return normalized;
+  return normalized.slice(start, end + 1).trim();
+}
+
+export function parseFlexibleJson(text) {
+  const candidate = extractJsonCandidate(text);
+  try {
+    const parsed = JSON.parse(candidate);
+    return {
+      valid: true,
+      parsed,
+      formatted: JSON.stringify(parsed, null, 2),
+      candidate
+    };
+  } catch (error) {
+    return {
+      valid: false,
+      parsed: null,
+      formatted: candidate,
+      candidate,
+      error: error.message
+    };
+  }
+}
+
+function shortHash(value) {
+  return crypto.createHash("sha1").update(String(value || "")).digest("hex").slice(0, 8);
+}
+
+export function slugifyTitle(title, fallbackSource = "") {
+  const ascii = String(title || "")
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 70);
+  if (ascii) return ascii;
+  const date = nowJst().slice(0, 10).replaceAll("-", "");
+  return `${date}-${shortHash(`${title}:${fallbackSource}`)}`;
+}
+
+export function detectInputType(text, fileName = "") {
+  const name = String(fileName || "").toLowerCase();
+  if (name.endsWith(".json")) return "json";
+  if (name.endsWith(".md") || name.endsWith(".markdown")) return "markdown";
+  if (name.endsWith(".txt")) return "plain_text";
+  const trimmed = String(text || "").trim();
+  if (/^https?:\/\/\S+$/i.test(trimmed)) return "url";
+  const json = parseFlexibleJson(trimmed);
+  if (trimmed.includes("{") && trimmed.includes("}") && (json.valid || /^```json/i.test(trimmed))) return "json";
+  if (/^#{1,6}\s+/m.test(trimmed) || /```/.test(trimmed) || /\n[-*]\s+/.test(trimmed)) return "markdown";
+  return "plain_text";
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (Array.isArray(value) && value.length) return value;
+    if (value !== undefined && value !== null && String(value).trim()) return value;
+  }
+  return "";
+}
+
+export function extractKnownTools(text, explicitTools = "") {
+  const tools = new Set(parseTools(explicitTools));
+  const candidates = [
+    "ChatGPT",
+    "Codex",
+    "GitHub",
+    "Netlify",
+    "Slack",
+    "Notion",
+    "Google Sheets",
+    "WordPress",
+    "note",
+    "X",
+    "Threads"
+  ];
+  for (const tool of candidates) {
+    const escaped = tool.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`(^|[^A-Za-z0-9])${escaped}([^A-Za-z0-9]|$)`, "i").test(String(text || ""))) {
+      tools.add(tool);
+    }
+  }
+  return [...tools];
+}
+
+export function detectSensitiveWarnings(text) {
+  const warnings = [];
+  const source = String(text || "");
+  if (/(api[_-]?key|secret|token|bearer\s+[a-z0-9._-]+)/i.test(source)) warnings.push("APIキー、secret、tokenらしき文字列が含まれている可能性があります。");
+  if (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(source)) warnings.push("メールアドレスらしき文字列が含まれている可能性があります。");
+  if (/(¥|￥|\$)\s?\d[\d,]*(?:\.\d+)?|\d[\d,]*\s?(円|万円|ドル)/.test(source)) warnings.push("金額情報らしき文字列が含まれている可能性があります。");
+  if (/(株式会社|有限会社|合同会社|Inc\.|LLC|顧客|クライアント)/i.test(source)) warnings.push("顧客名や会社名らしき情報が含まれている可能性があります。");
+  return warnings;
+}
+
+export function buildAutoKnowledgePayload({ text, fileName = "", source = "slack_event", slack = {} }) {
+  const body = String(text || "").trim();
+  const inputType = detectInputType(body, fileName);
+  const jsonResult = inputType === "json" ? parseFlexibleJson(body) : null;
+  const parsed = jsonResult?.valid && isPlainObject(jsonResult.parsed) ? jsonResult.parsed : {};
+  const heading = body.match(/^#{1,6}\s+(.+)$/m)?.[1]?.trim();
+  const plainTitle = body.split(/\r?\n/).find((line) => line.trim())?.replace(/^[-*#\s]+/, "").trim();
+  const title = String(firstNonEmpty(
+    parsed.project_title,
+    parsed.title,
+    heading,
+    plainTitle ? plainTitle.slice(0, 50) : ""
+  ) || "untitled").trim();
+  const category = String(firstNonEmpty(parsed.project_category, parsed.category, "未分類"));
+  const rawStatus = String(firstNonEmpty(parsed.status, "saved"));
+  const status = statuses.has(rawStatus) ? rawStatus : "saved";
+  const summary = String(firstNonEmpty(parsed.implementation_summary, parsed.summary, parsed.article_main_message, body.slice(0, 160)));
+  const rawKnowledgeType = String(firstNonEmpty(parsed.knowledge_type, parsed.type, "notes"));
+  const knowledgeType = knowledgeTypeFolders[rawKnowledgeType] ? rawKnowledgeType : "notes";
+  const projectKey = String(firstNonEmpty(parsed.project_key, parsed.slug, slugifyTitle(title, body)));
+  const tools = extractKnownTools(body, parsed.tools_used || parsed.tools || "");
+  const warnings = detectSensitiveWarnings(body);
+
+  return {
+    title,
+    knowledge_type: knowledgeType,
+    project_key: projectKey,
+    category,
+    status,
+    tools,
+    summary,
+    input_type: inputType,
+    body,
+    save_mode: "upsert",
+    source,
+    slack_channel: slack.channel || "",
+    slack_ts: slack.ts || "",
+    slack_message_url: slack.message_url || "",
+    slack_event_id: slack.event_id || "",
+    json_parse_warning: inputType === "json" && jsonResult && !jsonResult.valid
+      ? "JSONとしては壊れていますが、原文保存しました。"
+      : "",
+    warnings,
+    extracted: {
+      private_or_sensitive_info_to_hide: parsed.private_or_sensitive_info_to_hide || warnings,
+      media_theme: parsed.media_theme || "",
+      article_main_message: parsed.article_main_message || "",
+      content_strategy: parsed.content_strategy || "",
+      wordpress_article_angles: parsed.wordpress_article_angles || "",
+      note_article_angles: parsed.note_article_angles || "",
+      x_threads_post_ideas: parsed.x_threads_post_ideas || ""
+    }
+  };
+}
+
 function yamlQuote(value) {
   return JSON.stringify(String(value || ""));
 }
@@ -175,7 +356,14 @@ export function normalizeKnowledgePayload(input) {
     body: String(input.body ?? input.body_short ?? "").trim(),
     save_mode: String(input.save_mode || "upsert").trim(),
     source: String(input.source || "web").trim(),
-    file_reference: String(input.file_reference || "").trim()
+    file_reference: String(input.file_reference || "").trim(),
+    slack_channel: String(input.slack_channel || "").trim(),
+    slack_ts: String(input.slack_ts || "").trim(),
+    slack_message_url: String(input.slack_message_url || "").trim(),
+    slack_event_id: String(input.slack_event_id || "").trim(),
+    json_parse_warning: String(input.json_parse_warning || "").trim(),
+    warnings: Array.isArray(input.warnings) ? input.warnings : [],
+    extracted: isPlainObject(input.extracted) ? input.extracted : {}
   };
 
   const errors = [];
@@ -193,20 +381,7 @@ export function normalizeKnowledgePayload(input) {
 }
 
 function parseJsonInput(body) {
-  try {
-    return {
-      parsed: JSON.parse(body),
-      formatted: JSON.stringify(JSON.parse(body), null, 2),
-      valid: true
-    };
-  } catch (error) {
-    return {
-      parsed: null,
-      formatted: body,
-      valid: false,
-      error: error.message
-    };
-  }
+  return parseFlexibleJson(body);
 }
 
 function buildMarkdown(payload, options) {
@@ -375,9 +550,15 @@ function buildMetadata(payload, created, updated, paths, existingMetadata = null
     save_mode: payload.save_mode,
     path: paths.indexPath,
     raw_json_path: paths.rawJsonPath,
+    raw_md_path: paths.rawMdPath,
     raw_txt_path: paths.rawTxtPath,
+    raw_path: paths.rawPath,
     created: existingMetadata?.created || created,
-    updated
+    updated,
+    slack_channel: payload.slack_channel || existingMetadata?.slack_channel || "",
+    slack_message_url: payload.slack_message_url || existingMetadata?.slack_message_url || "",
+    warnings: payload.warnings || existingMetadata?.warnings || [],
+    extracted: payload.extracted || existingMetadata?.extracted || {}
   };
 }
 
@@ -392,7 +573,9 @@ function indexEntry(metadata) {
     summary: metadata.summary,
     path: metadata.path,
     raw_json_path: metadata.raw_json_path,
+    raw_md_path: metadata.raw_md_path,
     raw_txt_path: metadata.raw_txt_path,
+    raw_path: metadata.raw_path,
     created: metadata.created,
     updated: metadata.updated
   };
@@ -437,6 +620,7 @@ export async function saveKnowledgeToGitHub(input) {
   const paths = {
     indexPath: `${basePath}/index.md`,
     rawJsonPath: `${basePath}/raw.json`,
+    rawMdPath: `${basePath}/raw.md`,
     rawTxtPath: `${basePath}/raw.txt`,
     metadataPath: `${basePath}/metadata.json`
   };
@@ -479,7 +663,9 @@ export async function saveKnowledgeToGitHub(input) {
   const allUpdateLinks = [...existingUpdateLinks, ...updateLinks];
 
   const rawJsonPath = isUpdate ? `${basePath}/raw-${rawStamp}.json` : paths.rawJsonPath;
+  const rawMdPath = isUpdate ? `${basePath}/raw-${rawStamp}.md` : paths.rawMdPath;
   const rawTxtPath = isUpdate ? `${basePath}/raw-${rawStamp}.txt` : paths.rawTxtPath;
+  let rawPath = rawTxtPath;
 
   if (isUpdate) {
     const updateMarkdown = buildUpdateMarkdown(
@@ -495,11 +681,17 @@ export async function saveKnowledgeToGitHub(input) {
   if (payload.input_type === "json") {
     if (jsonResult.valid) {
       await client.putFile(rawJsonPath, `${jsonResult.formatted}\n`, `Save raw JSON for ${payload.project_key}`);
+      rawPath = rawJsonPath;
     } else {
       await client.putFile(rawTxtPath, `${payload.body}\n`, `Save unverified JSON text for ${payload.project_key}`);
+      rawPath = rawTxtPath;
     }
+  } else if (payload.input_type === "markdown") {
+    await client.putFile(rawMdPath, `${payload.body}\n`, `Save raw Markdown for ${payload.project_key}`);
+    rawPath = rawMdPath;
   } else {
     await client.putFile(rawTxtPath, `${payload.body}\n`, `Save raw text for ${payload.project_key}`);
+    rawPath = rawTxtPath;
   }
 
   const markdown = isUpdate && existingIndex?.content
@@ -516,7 +708,9 @@ export async function saveKnowledgeToGitHub(input) {
   const metadata = buildMetadata(payload, created, updated, {
     ...paths,
     rawJsonPath: payload.input_type === "json" && jsonResult?.valid ? rawJsonPath : paths.rawJsonPath,
-    rawTxtPath: payload.input_type === "json" && jsonResult?.valid ? paths.rawTxtPath : rawTxtPath
+    rawMdPath: payload.input_type === "markdown" ? rawMdPath : paths.rawMdPath,
+    rawTxtPath: payload.input_type === "json" && jsonResult?.valid ? paths.rawTxtPath : rawTxtPath,
+    rawPath
   }, existingMetadata);
 
   await client.putFile(paths.metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, `Save metadata for ${payload.project_key}`);
@@ -531,11 +725,18 @@ export async function saveKnowledgeToGitHub(input) {
     save_mode: payload.save_mode,
     index_path: paths.indexPath,
     raw_json_path: metadata.raw_json_path,
+    raw_md_path: metadata.raw_md_path,
     raw_txt_path: metadata.raw_txt_path,
+    raw_path: metadata.raw_path,
     metadata_path: paths.metadataPath,
+    created: metadata.created,
+    updated: metadata.updated,
     index_url: indexFile.html_url || `${htmlBase}/${paths.indexPath}`,
     raw_json_url: `${htmlBase}/${metadata.raw_json_path}`,
-    raw_txt_url: `${htmlBase}/${metadata.raw_txt_path}`
+    raw_md_url: `${htmlBase}/${metadata.raw_md_path}`,
+    raw_txt_url: `${htmlBase}/${metadata.raw_txt_path}`,
+    raw_url: `${htmlBase}/${metadata.raw_path}`,
+    json_parse_warning: payload.json_parse_warning || ""
   };
 }
 
