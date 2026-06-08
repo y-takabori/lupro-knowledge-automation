@@ -1,0 +1,38 @@
+{
+  "title": "Slack確認カード改善テスト",
+  "project_key": "20260609-0758-12345b5e",
+  "project_key_source": "body_hash",
+  "knowledge_type": "notes",
+  "category": "未分類",
+  "status": "saved",
+  "tools": [
+    "ChatGPT",
+    "Codex",
+    "GitHub",
+    "Netlify",
+    "Slack"
+  ],
+  "summary": "# Slack確認カード改善テスト\n\nSlackに投稿した内容を、保存前に確認し、必要に応じて新規保存・既存追記・キャンセルできるか確認しています。\n\n目的：\nナレッジ保存前に人間が確認できるようにし、誤保存や誤更新を防ぐこと。\n\n使用ツール：\nChatGPT, Codex, Slack, GitHub, Netlif",
+  "source": "slack_event",
+  "input_type": "markdown",
+  "save_mode": "new",
+  "path": "knowledge/notes/20260609-0758-12345b5e/index.md",
+  "raw_json_path": "knowledge/notes/20260609-0758-12345b5e/raw.json",
+  "raw_md_path": "knowledge/notes/20260609-0758-12345b5e/raw.md",
+  "raw_txt_path": "knowledge/notes/20260609-0758-12345b5e/raw.txt",
+  "raw_path": "knowledge/notes/20260609-0758-12345b5e/raw.md",
+  "created": "2026-06-09T07:58:53+09:00",
+  "updated": "2026-06-09T07:58:53+09:00",
+  "slack_channel": "C0B8YN010J2",
+  "slack_message_url": "",
+  "warnings": [],
+  "extracted": {
+    "private_or_sensitive_info_to_hide": [],
+    "media_theme": "",
+    "article_main_message": "",
+    "content_strategy": "",
+    "wordpress_article_angles": "",
+    "note_article_angles": "",
+    "x_threads_post_ideas": ""
+  }
+}
