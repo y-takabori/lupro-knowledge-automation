@@ -122,14 +122,26 @@ async function slackApi(method, body) {
 }
 
 async function postThread(channel, threadTs, text, blocks = null) {
-  await slackApi("chat.postMessage", {
+  return slackApi("chat.postMessage", {
     channel,
     thread_ts: threadTs,
     text,
     blocks,
     unfurl_links: false,
     unfurl_media: false
-  }).catch(() => {});
+  }).catch(() => ({}));
+}
+
+async function updateSlackMessage(channel, ts, text, blocks = null) {
+  if (!channel || !ts) return null;
+  return slackApi("chat.update", {
+    channel,
+    ts,
+    text,
+    blocks,
+    unfurl_links: false,
+    unfurl_media: false
+  }).catch(() => null);
 }
 
 async function getPermalink(channel, messageTs) {
@@ -179,8 +191,10 @@ function tokenSet(entry) {
   ].filter(Boolean).join(" ")).toLowerCase().split(/[\s\-_/、。,.]+/).filter(Boolean));
 }
 
-function similarity(payload, entry) {
-  if (payload.project_key && payload.project_key === entry.project_key) return 100;
+function similarityDetails(payload, entry) {
+  if (payload.project_key && payload.project_key === entry.project_key) {
+    return { score: 100, reason: "保存キーが一致" };
+  }
   const a = tokenSet({
     title: payload.title,
     project_key: payload.project_key,
@@ -197,14 +211,22 @@ function similarity(payload, entry) {
     String(entry.title).includes(payload.title)
   ) ? 5 : 0;
   const categoryHit = payload.category && payload.category === entry.category ? 2 : 0;
-  return overlap + titleHit + categoryHit;
+  const score = overlap + titleHit + categoryHit;
+  const reasons = [];
+  if (titleHit) reasons.push("タイトル・本文が近い");
+  if (categoryHit) reasons.push("カテゴリが近い");
+  if (overlap && !titleHit) reasons.push("本文の語句が近い");
+  return { score, reason: reasons.join(" / ") || "関連語句が近い" };
 }
 
 async function findSimilarKnowledge(client, payload) {
   const entries = await readJsonFile(client, "knowledge/index.json", []);
   if (!Array.isArray(entries)) return [];
   return entries
-    .map((entry) => ({ ...entry, score: similarity(payload, entry) }))
+    .map((entry) => {
+      const details = similarityDetails(payload, entry);
+      return { ...entry, score: details.score, similar_reason: details.reason };
+    })
     .filter((entry) => entry.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
@@ -248,14 +270,18 @@ function safeLog(message, details = {}) {
 function candidateText(candidates) {
   if (!candidates.length) return "なし";
   return candidates
-    .map((item, index) => `${index + 1}. ${item.title || item.project_key} (${item.knowledge_type}/${item.project_key})`)
+    .map((item, index) => [
+      `${index + 1}. ${item.title || item.project_key}`,
+      `   保存先: ${item.knowledge_type}/${item.project_key}`,
+      `   類似理由: ${item.similar_reason || "関連語句が近い"}`
+    ].join("\n"))
     .join("\n");
 }
 
 function recommendedText(candidates) {
   if (!candidates.length) return "新規作成";
   const first = candidates[0];
-  return `既存ナレッジ「${first.title || first.project_key}」に更新`;
+  return `${first.title || first.project_key}（${first.knowledge_type}/${first.project_key}）`;
 }
 
 function confirmationBlocks(pending) {
@@ -276,14 +302,17 @@ function confirmationBlocks(pending) {
         `*推定使用ツール:*\n${parseTools(payload.tools).join(", ") || "未取得"}`,
         `*公開時に注意が必要そうな情報:*\n${warningsText(payload.warnings)}`,
         `*類似ナレッジ候補:*\n${candidateText(pending.candidates || [])}`,
-        `*おすすめ保存方法:*\n${recommendedText(pending.candidates || [])}`,
+        `*おすすめ更新先:*\n${recommendedText(pending.candidates || [])}`,
+        candidate
+          ? "このボタンを押すと、上記の既存ナレッジに追記・更新します。"
+          : "類似候補がないため、新規保存がおすすめです。",
         "",
-        "*ボタンの意味:*",
-        "新規保存: 新しいナレッジとして保存",
-        "おすすめに更新: Botが似ていると判断した既存ナレッジに追記",
-        "別の既存を選ぶ: 別の既存ナレッジを選んで更新",
-        "内容を編集: タイトルや保存キーを直してから保存",
-        "キャンセル: 保存しない",
+        "*操作を選んでください:*",
+        "新規保存: 新しいナレッジとして保存します",
+        "候補1に追記: おすすめ更新先の既存ナレッジに追記します",
+        "更新先を選ぶ: 別の既存ナレッジを選んで追記します",
+        "内容を編集: タイトル・分類・保存先を直してから保存します",
+        "キャンセル: 保存せず終了します",
         "",
         "この内容で保存しますか？"
       ].join("\n"))
@@ -300,14 +329,14 @@ function confirmationBlocks(pending) {
         },
         {
           type: "button",
-          text: slackText("おすすめに更新"),
+          text: slackText(candidate ? "候補1に追記" : "候補なし"),
           style: candidate ? "primary" : undefined,
           action_id: "knowledge_confirm_recommended_update",
           value: pending.pending_key
         },
         {
           type: "button",
-          text: slackText("別の既存を選ぶ"),
+          text: slackText("更新先を選ぶ"),
           action_id: "knowledge_confirm_choose_existing",
           value: pending.pending_key
         },
@@ -325,6 +354,15 @@ function confirmationBlocks(pending) {
           value: pending.pending_key
         }
       ]
+    }
+  ];
+}
+
+function finishedBlocks(title, detail) {
+  return [
+    {
+      type: "section",
+      text: mrkdwn(`*${title}*\n${detail}`)
     }
   ];
 }
@@ -383,6 +421,15 @@ async function markPending(client, pending, status, extra = {}) {
   }
 }
 
+async function finishConfirmationCard(pending, title, detail) {
+  await updateSlackMessage(
+    pending.channel,
+    pending.confirmation_message_ts,
+    `${title}\n${detail}`,
+    finishedBlocks(title, detail)
+  );
+}
+
 async function createPendingFromEvent(body) {
   const event = body.event;
   if (shouldIgnoreEvent(body, event)) return;
@@ -438,18 +485,33 @@ async function createPendingFromEvent(body) {
     candidates
   };
   await putJsonFile(client, pendingPath(pendingKey), pending, `Create pending knowledge ${pendingKey}`);
-  await postThread(
+  const confirmationMessage = await postThread(
     event.channel,
     event.ts,
     "ナレッジ候補を読み取りました。まだ保存していません。",
     confirmationBlocks(pending)
   );
+  if (confirmationMessage?.ts) {
+    await putJsonFile(client, pendingPath(pendingKey), {
+      ...pending,
+      confirmation_message_ts: confirmationMessage.ts
+    }, `Store pending confirmation message ${pendingKey}`);
+  }
 }
 
 async function openChooseModal(triggerId, pending) {
   const client = getGitHubClient();
   const entries = await readJsonFile(client, "knowledge/index.json", []);
-  const options = (Array.isArray(entries) ? entries : [])
+  if (!Array.isArray(entries) || entries.length === 0) {
+    await postThread(pending.channel, pending.thread_ts, "候補を取得できませんでした。knowledge/index.json が空、または取得できませんでした。");
+    return;
+  }
+  const similarKeys = new Set((pending.candidates || []).map((entry) => `${entry.knowledge_type}|${entry.project_key}`));
+  const similar = (pending.candidates || []).filter((entry) => entry.knowledge_type && entry.project_key);
+  const recent = entries
+    .filter((entry) => !similarKeys.has(`${entry.knowledge_type}|${entry.project_key}`))
+    .sort((a, b) => String(b.updated || "").localeCompare(String(a.updated || "")));
+  const options = [...similar, ...recent]
     .slice(0, 100)
     .map((entry) => option(
       `${entry.knowledge_type}|${entry.project_key}`,
@@ -461,10 +523,14 @@ async function openChooseModal(triggerId, pending) {
       type: "modal",
       callback_id: "knowledge_choose_existing_submit",
       private_metadata: pending.pending_key,
-      title: slackText("更新先を選択"),
-      submit: slackText("更新保存"),
+      title: slackText("更新先ナレッジを選択"),
+      submit: slackText("このナレッジに追記する"),
       close: slackText("キャンセル"),
       blocks: [
+        {
+          type: "section",
+          text: mrkdwn("この投稿を追記・更新する既存ナレッジを選んでください。")
+        },
         {
           type: "input",
           block_id: "target",
@@ -472,7 +538,7 @@ async function openChooseModal(triggerId, pending) {
           element: {
             type: "static_select",
             action_id: "target",
-            options: options.length ? options : [option("none|none", "候補がありません")]
+            options
           }
         }
       ]
@@ -539,13 +605,22 @@ async function handleAction(payload) {
   const client = getGitHubClient();
   const pending = await readJsonFile(client, pendingPath(action.value), null);
   if (!pending || pending.status !== "pending") {
-    await postThread(payload.channel?.id, payload.message?.thread_ts || payload.message?.ts, "この確認は処理済み、または期限切れです。");
+    const status = pending?.status;
+    const message = status === "cancelled"
+      ? "この確認はすでにキャンセル済みです。保存したい場合は、もう一度ナレッジ本文を投稿してください。"
+      : status === "saved"
+        ? "この確認はすでに保存済みです。追加で保存したい場合は、もう一度ナレッジ本文を投稿してください。"
+        : "この確認は期限切れ、または処理できない状態です。保存したい場合は、もう一度ナレッジ本文を投稿してください。";
+    await postThread(payload.channel?.id, payload.message?.thread_ts || payload.message?.ts, message);
     return;
   }
 
   if (action.action_id === "knowledge_confirm_cancel") {
     await markPending(client, pending, "cancelled");
-    await postThread(pending.channel, pending.thread_ts, "キャンセルしました。GitHub本保存・Google Sheets更新は行っていません。");
+    const title = "キャンセルしました。";
+    const detail = "GitHub本保存・Google Sheets更新は行っていません。保存したい場合は、もう一度ナレッジ本文を投稿してください。";
+    await finishConfirmationCard(pending, title, detail);
+    await postThread(pending.channel, pending.thread_ts, `${title}\n${detail}`);
     return;
   }
 
@@ -586,6 +661,11 @@ async function handleAction(payload) {
   try {
     const saved = await saveApprovedPending(pending, overrides);
     await markPending(client, pending, "saved", { result: saved.result });
+    await finishConfirmationCard(
+      pending,
+      "保存済みです。",
+      `GitHub本保存を完了しました。\n保存先: ${saved.result.knowledge_type}/${saved.result.project_key}`
+    );
     await postThread(pending.channel, pending.thread_ts, resultMessage(saved.result, saved.sheets));
   } catch (error) {
     await postThread(pending.channel, pending.thread_ts, `保存に失敗しました。\n${error.message}`);
@@ -688,6 +768,11 @@ async function handleViewSubmission(payload) {
   try {
     const saved = await saveApprovedPending(pending, overrides);
     await markPending(client, pending, "saved", { result: saved.result });
+    await finishConfirmationCard(
+      pending,
+      "保存済みです。",
+      `GitHub本保存を完了しました。\n保存先: ${saved.result.knowledge_type}/${saved.result.project_key}`
+    );
     await postThread(pending.channel, pending.thread_ts, resultMessage(saved.result, saved.sheets));
   } catch (error) {
     await postThread(pending.channel, pending.thread_ts, `保存に失敗しました。\n${error.message}`);
