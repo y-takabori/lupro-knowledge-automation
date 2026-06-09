@@ -49,6 +49,7 @@ const eventHeaders = [
   "category",
   "input_type",
   "slack_user",
+  "status",
   "github_index_url",
   "raw_url",
   "metadata_url",
@@ -80,12 +81,81 @@ const outputHistoryHeaders = [
   "note"
 ];
 
+const headerLabels = {
+  project_key: "保存キー",
+  title: "タイトル",
+  knowledge_type: "種別",
+  category: "カテゴリ",
+  status: "ステータス",
+  summary: "概要",
+  tools: "使用ツール",
+  github_index_url: "GitHub本文URL",
+  raw_url: "元データURL",
+  metadata_url: "メタデータURL",
+  note_output_url: "note草案URL",
+  x_threads_output_url: "X/Threads案URL",
+  paid_manual_output_url: "有料マニュアル案URL",
+  template_readme_output_url: "テンプレートREADME URL",
+  sales_output_url: "営業・支援メモURL",
+  latest_output_at: "最終出力日時",
+  output_count: "出力数",
+  created_at: "作成日時",
+  updated_at: "更新日時",
+  update_count: "更新回数",
+  last_event_type: "最終イベント種別",
+  last_update_url: "最終追記URL",
+  source: "保存元",
+  input_type: "入力形式",
+  sensitive_info: "公開注意情報",
+  slack_user: "保存者",
+  slack_channel: "Slackチャンネル",
+  slack_ts: "Slack投稿TS",
+  source_type: "保存元種別",
+  file_name: "ファイル名",
+  file_size: "ファイルサイズ",
+  char_count: "文字数",
+  has_attachment: "添付あり",
+  has_supplemental_text: "補足本文あり",
+  event_id: "イベントID",
+  event_time: "実行日時",
+  event_type: "イベント種別",
+  save_mode: "保存モード",
+  update_url: "追記URL",
+  note: "メモ",
+  output_id: "出力ID",
+  source_title: "元ナレッジタイトル",
+  output_type: "出力種別",
+  output_title: "出力タイトル",
+  output_url: "出力URL",
+  created_by: "作成者",
+  model: "使用モデル"
+};
+
+const reverseHeaderLabels = new Map([
+  ...Object.entries(headerLabels).map(([key, label]) => [label, key]),
+  ["操作者", "slack_user"]
+]);
+
+function displayHeader(header, headers = null) {
+  if (headers === eventHeaders && header === "slack_user") return "操作者";
+  return headerLabels[header] || header;
+}
+
+function displayHeaders(headers) {
+  return headers.map((header) => displayHeader(header, headers));
+}
+
+function canonicalHeader(header) {
+  return reverseHeaderLabels.get(header) || header;
+}
+
 const sheetFormatState = new Set();
 const testCleanupProjectKeys = new Set([
   "google-sheets",
   "google-sheets-2",
   "google-sheets-3",
   "slack",
+  "20260609-1640-9632fdcc",
   "20260609-0758-12345b5e",
   "test-knowledge"
 ]);
@@ -199,7 +269,20 @@ async function ensureHeaders(config, token, sheetName, headers) {
   const writePath = rangePath(sheetName, `A1:${endCol}1`);
   const data = await valuesRequest(config, token, readPath, { method: "GET" }).catch(() => ({}));
   const existing = data.values?.[0] || [];
-  if (existing.join("\t") === headers.join("\t")) return sheetProperties;
+  const existingCanonical = existing.map(canonicalHeader);
+  if (existingCanonical.join("\t") === headers.join("\t")) {
+    if (existing.join("\t") !== displayHeaders(headers).join("\t")) {
+      await valuesRequest(config, token, `${writePath}?valueInputOption=RAW`, {
+        method: "PUT",
+        body: JSON.stringify({
+          range: `'${sheetName}'!A1:${endCol}1`,
+          majorDimension: "ROWS",
+          values: [displayHeaders(headers)]
+        })
+      });
+    }
+    return sheetProperties;
+  }
   if (existing.length > 0) {
     await migrateRowsToHeaders(config, token, sheetName, existing, headers);
     return sheetProperties;
@@ -209,7 +292,7 @@ async function ensureHeaders(config, token, sheetName, headers) {
     body: JSON.stringify({
       range: `'${sheetName}'!A1:${endCol}1`,
       majorDimension: "ROWS",
-      values: [headers]
+      values: [displayHeaders(headers)]
     })
   });
   return sheetProperties;
@@ -221,8 +304,9 @@ async function migrateRowsToHeaders(config, token, sheetName, existingHeaders, t
   const data = await valuesRequest(config, token, allDataPath, { method: "GET" }).catch(() => ({ values: [] }));
   const rows = data.values || [];
   const sourceHeaders = rows[0] || existingHeaders;
-  const sourceIndex = new Map(sourceHeaders.map((header, index) => [header, index]));
-  const unknownHeaders = sourceHeaders.filter((header) => header && !targetHeaders.includes(header));
+  const sourceCanonicalHeaders = sourceHeaders.map(canonicalHeader);
+  const sourceIndex = new Map(sourceCanonicalHeaders.map((header, index) => [header, index]));
+  const unknownHeaders = sourceCanonicalHeaders.filter((header) => header && !targetHeaders.includes(header));
   const nextHeaders = [...targetHeaders, ...unknownHeaders];
   const nextRows = rows.slice(1).map((row) => nextHeaders.map((header) => {
     const index = sourceIndex.get(header);
@@ -235,7 +319,7 @@ async function migrateRowsToHeaders(config, token, sheetName, existingHeaders, t
     body: JSON.stringify({
       range: `'${sheetName}'!A1:${endCol}${Math.max(nextRows.length + 1, 1)}`,
       majorDimension: "ROWS",
-      values: [nextHeaders, ...nextRows]
+      values: [displayHeaders(nextHeaders), ...nextRows]
     })
   });
 }
@@ -592,6 +676,7 @@ function buildEventRow(payload, result, options = {}) {
     sheetValue(payload.category || "", 120),
     payload.input_type || "",
     payload.slack_user || "",
+    sheetValue(payload.status || result.status || "", 80),
     result.index_url || "",
     rawUrl(result),
     result.metadata_url || "",

@@ -785,6 +785,8 @@ closing `---` がない場合でも、冒頭に `title:` / `category:` / `status
 Google Sheetsへ書き込む値は、配列・オブジェクトをそのまま渡さず、人間が読める短文に整形します。`summary` が object / array の場合は `summary` / `text` / `value` / `description` / `body` / `implementation_summary` / `article_main_message` / `facts` / `inferences` などを優先して抽出し、`[object Object]` が出ないようにします。
 `summary` が明示されていない場合は、`description`、`theme`、`article_main_message`、概要・背景系セクション、本文中の自然文を順に使います。`tools`、`media_use`、APIキー注意文、短すぎる `no` などはsummary候補から除外します。
 
+Google Sheetsのヘッダーは運用者が読みやすい日本語表示にします。内部処理、payload、metadata.json、GitHub保存ファイルでは従来どおり `project_key` / `title` / `summary` などの英語キーを使い、Sheetsへのヘッダー作成・移行時だけ `保存キー` / `タイトル` / `概要` などへ変換します。既存の英語ヘッダー行は、値の列ズレが起きないように対応する日本語ヘッダーへ移行します。
+
 ## 出力物の紐づけ管理
 
 保存済みナレッジから生成したnote記事草案、X/Threads投稿案、有料マニュアル、テンプレートREADME、営業メモは、元ナレッジ配下に保存できます。
