@@ -1,7 +1,7 @@
 {
   "pending_key": "C0B8YN010J2-1780966903.553409",
   "dedupe_key": "Ev0B90184XC3",
-  "status": "pending",
+  "status": "saved",
   "created_at": "2026-06-09T01:01:46.087Z",
   "channel": "C0B8YN010J2",
   "thread_ts": "1780966903.553409",
@@ -118,5 +118,34 @@
       "similar_reason": "カテゴリが近い / 本文の語句が近い"
     }
   ],
-  "confirmation_message_ts": "1780966906.860839"
+  "confirmation_message_ts": "1780966906.860839",
+  "updated_at": "2026-06-09T01:02:30.270Z",
+  "result": {
+    "message": "Saved knowledge to GitHub.",
+    "title": "Google Sheets連携テスト2",
+    "knowledge_type": "notes",
+    "project_key": "google-sheets-2",
+    "project_key_source": "markdown_heading",
+    "save_mode": "new",
+    "index_path": "knowledge/notes/google-sheets-2/index.md",
+    "raw_json_path": "knowledge/notes/google-sheets-2/raw.json",
+    "raw_md_path": "knowledge/notes/google-sheets-2/raw.md",
+    "raw_txt_path": "knowledge/notes/google-sheets-2/raw.txt",
+    "raw_path": "knowledge/notes/google-sheets-2/raw.md",
+    "metadata_path": "knowledge/notes/google-sheets-2/metadata.json",
+    "update_path": "",
+    "update_json_path": "",
+    "created": "2026-06-09T10:02:26+09:00",
+    "updated": "2026-06-09T10:02:26+09:00",
+    "index_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets-2/index.md",
+    "raw_json_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets-2/raw.json",
+    "raw_md_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets-2/raw.md",
+    "raw_txt_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets-2/raw.txt",
+    "raw_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets-2/raw.md",
+    "metadata_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets-2/metadata.json",
+    "update_url": "",
+    "update_json_url": "",
+    "is_update": false,
+    "json_parse_warning": ""
+  }
 }
