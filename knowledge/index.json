@@ -1,25 +1,21 @@
 [
   {
-    "title": "Slack確認カード改善テスト",
+    "title": "Slack確認カード改善テスト 追記",
     "project_key": "20260609-0758-12345b5e",
     "knowledge_type": "notes",
     "category": "未分類",
     "status": "saved",
     "tools": [
-      "ChatGPT",
-      "Codex",
-      "GitHub",
-      "Netlify",
       "Slack"
     ],
-    "summary": "# Slack確認カード改善テスト\n\nSlackに投稿した内容を、保存前に確認し、必要に応じて新規保存・既存追記・キャンセルできるか確認しています。\n\n目的：\nナレッジ保存前に人間が確認できるようにし、誤保存や誤更新を防ぐこと。\n\n使用ツール：\nChatGPT, Codex, Slack, GitHub, Netlif",
+    "summary": "# Slack確認カード改善テスト 追記\n\nさきほど保存したSlack確認カード改善テストに、更新先選択モーダルから追記できるか確認しています。\n\n目的：\n新規保存だけでなく、既存ナレッジに追記できるか確認すること。",
     "path": "knowledge/notes/20260609-0758-12345b5e/index.md",
     "raw_json_path": "knowledge/notes/20260609-0758-12345b5e/raw.json",
-    "raw_md_path": "knowledge/notes/20260609-0758-12345b5e/raw.md",
-    "raw_txt_path": "knowledge/notes/20260609-0758-12345b5e/raw.txt",
-    "raw_path": "knowledge/notes/20260609-0758-12345b5e/raw.md",
+    "raw_md_path": "knowledge/notes/20260609-0758-12345b5e/raw-20260609-090322.md",
+    "raw_txt_path": "knowledge/notes/20260609-0758-12345b5e/raw-20260609-090322.txt",
+    "raw_path": "knowledge/notes/20260609-0758-12345b5e/raw-20260609-090322.md",
     "created": "2026-06-09T07:58:53+09:00",
-    "updated": "2026-06-09T07:58:53+09:00"
+    "updated": "2026-06-09T09:03:22+09:00"
   },
   {
     "title": "Slack自動保存テストです。",
