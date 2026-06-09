@@ -413,21 +413,24 @@ function improvedResultMessage(result, sheets, pendingTitle = "") {
     return [
       "既存ナレッジに追記しました",
       `更新先タイトル: ${result.title}`,
-      `更新先保存キー: ${result.project_key}`,
+      `project_key: ${result.project_key}`,
+      `save_mode: update`,
       `今回の追記タイトル: ${pendingTitle || result.title}`,
+      `GitHub保存: 成功`,
+      `GitHub index.md URL: ${result.index_url}`,
       `追記ファイルURL: ${result.update_url || result.update_json_url || ""}`,
-      `index.md URL: ${result.index_url}`,
       `raw: ${rawUrl}`,
-      `metadata.json URL: ${metadataUrl}`,
       `Google Sheets: ${sheetsText}`,
       `Web貼り付け画面: ${env("URL") || ""}/public/knowledge-ingest.html`
     ].join("\n");
   }
   return [
     "新規保存しました",
-    `タイトル: ${result.title}`,
-    `保存先: ${result.knowledge_type}/${result.project_key}`,
-    `index.md URL: ${result.index_url}`,
+    `title: ${result.title}`,
+    `knowledge_type: ${result.knowledge_type}`,
+    `project_key: ${result.project_key}`,
+    `GitHub保存: 成功`,
+    `GitHub index.md URL: ${result.index_url}`,
     `raw: ${rawUrl}`,
     `metadata.json URL: ${metadataUrl}`,
     `Google Sheets: ${sheetsText}`,
@@ -518,6 +521,7 @@ async function createPendingFromEvent(body) {
     slack: {
       channel: event.channel,
       ts: event.ts,
+      user: event.user || "",
       message_url: slackMessageUrl,
       event_id: dedupeKey
     }

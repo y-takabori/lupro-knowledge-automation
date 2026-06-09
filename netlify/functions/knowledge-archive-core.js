@@ -331,6 +331,7 @@ export function buildAutoKnowledgePayload({ text, fileName = "", supplementalTex
     source,
     slack_channel: slack.channel || "",
     slack_ts: slack.ts || "",
+    slack_user: slack.user || "",
     slack_message_url: slack.message_url || "",
     slack_event_id: slack.event_id || "",
     json_parse_warning: inputType === "json" && jsonResult && !jsonResult.valid
@@ -396,6 +397,7 @@ export function normalizeKnowledgePayload(input) {
     theme: String(input.theme || "").trim(),
     slack_channel: String(input.slack_channel || "").trim(),
     slack_ts: String(input.slack_ts || "").trim(),
+    slack_user: String(input.slack_user || "").trim(),
     slack_message_url: String(input.slack_message_url || "").trim(),
     slack_event_id: String(input.slack_event_id || "").trim(),
     json_parse_warning: String(input.json_parse_warning || "").trim(),

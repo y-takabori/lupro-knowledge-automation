@@ -358,11 +358,62 @@ Google Sheets APIはサービスアカウント方式を想定しています。
 | `GOOGLE_SHEETS_SPREADSHEET_ID` | 一覧を保存するSpreadsheet ID |
 | `GOOGLE_SHEETS_WORKSHEET_NAME` | シート名。未設定時は `knowledge` |
 
+現在の推奨環境変数:
+
+| 変数名 | 用途 |
+| --- | --- |
+| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | サービスアカウントのclient email |
+| `GOOGLE_PRIVATE_KEY` | サービスアカウント秘密鍵。Netlify環境変数の `\n` はFunction内で改行に復元 |
+| `GOOGLE_SHEETS_SPREADSHEET_ID` | 保存先スプレッドシートID |
+| `GOOGLE_SHEETS_KNOWLEDGE_SHEET_NAME` | ナレッジ一覧シート名。未設定時は `ナレッジ一覧` |
+| `GOOGLE_SHEETS_EVENTS_SHEET_NAME` | 更新履歴シート名。未設定時は `更新履歴` |
+
+`GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` も後方互換として読みますが、新規設定では `GOOGLE_PRIVATE_KEY` を使ってください。対象スプレッドシートは、サービスアカウントのメールアドレスへ編集者として共有してください。
+
 想定列:
 
 作成日、更新日、タイトル、保存キー、ナレッジ種別、カテゴリ、ステータス、使用ツール、概要、GitHub index URL、raw URL、source、Slack channel、Slack message URL、note展開候補、WordPress展開候補、X/Threads展開候補、公開時に伏せる情報、次にやること
 
-Sheets環境変数が未設定、またはSheets API更新に失敗した場合でも、GitHub保存が成功していれば全体失敗にはしません。Slackには「GitHub保存成功 / Sheets更新失敗」または「Sheets未設定」と分けて通知します。
+Sheets環境変数が未設定、またはSheets API更新に失敗した場合でも、GitHub保存が成功していれば全体失敗にはしません。Slackには「GitHub保存: 成功」と「Google Sheets: 成功 / 未設定 / 失敗: 理由」を分けて通知します。
+
+### Sheetsの2シート構成
+
+`ナレッジ一覧` は「1ナレッジ = 1行」の管理用シートです。主な列は以下です。
+
+```text
+project_key, title, knowledge_type, category, status, summary, tools,
+github_index_url, raw_url, metadata_url, created_at, updated_at,
+update_count, last_event_type, last_update_url, source, input_type,
+sensitive_info, slack_channel, slack_ts
+```
+
+`更新履歴` は「1保存イベント = 1行」の履歴用シートです。主な列は以下です。
+
+```text
+event_id, project_key, title, event_type, save_mode, knowledge_type,
+category, input_type, github_index_url, raw_url, metadata_url,
+update_url, created_at, slack_channel, slack_ts, slack_user, source, note
+```
+
+新規保存時:
+
+- `ナレッジ一覧` に新しい行を追加
+- `更新履歴` に `event_type=created` で1行追加
+- `created_at` / `updated_at` は保存時刻
+- `update_count=0`
+- `last_event_type=created`
+
+既存追記時:
+
+- `ナレッジ一覧` で `project_key` が一致する行を探して更新
+- `updated_at` を更新
+- `update_count` を +1
+- `last_event_type=updated`
+- `last_update_url` に `updates/{timestamp}.md` またはJSON更新URLを保存
+- `更新履歴` に `event_type=updated` で1行追加
+- 一覧に `project_key` が見つからない場合は新規行として追加し、履歴の `note` に `project_key not found, inserted by update event` を残す
+
+キャンセル時はGitHub本保存もGoogle Sheets更新も行いません。
 
 ### 重複保存防止
 
