@@ -1,0 +1,82 @@
+{
+  "title": "LUPRO実践ナレッジ：note集約とGitHubテンプレート型マネタイズへの方針転換",
+  "project_key": "lupro-note-github",
+  "project_key_source": "json.title",
+  "knowledge_type": "notes",
+  "category": "AI業務効率化 / 発信戦略 / 商品設計",
+  "status": "draft",
+  "tools": [
+    "ChatGPT",
+    "Codex",
+    "GitHub",
+    "Netlify",
+    "Slack",
+    "Notion",
+    "WordPress",
+    "note",
+    "X",
+    "Threads"
+  ],
+  "summary": "[object Object]",
+  "theme": "LUPRO実践ナレッジをnote発信・GitHubテンプレート・有料導入マニュアル・実装支援へ展開するための商品設計",
+  "source": "slack_event",
+  "input_type": "json",
+  "save_mode": "new",
+  "path": "knowledge/notes/lupro-note-github/index.md",
+  "raw_json_path": "knowledge/notes/lupro-note-github/raw.json",
+  "raw_md_path": "knowledge/notes/lupro-note-github/raw.md",
+  "raw_txt_path": "knowledge/notes/lupro-note-github/raw.txt",
+  "raw_path": "knowledge/notes/lupro-note-github/raw.json",
+  "created": "2026-06-09T16:18:14+09:00",
+  "updated": "2026-06-09T16:18:14+09:00",
+  "created_at": "2026-06-09T16:18:14+09:00",
+  "updated_at": "2026-06-09T16:18:14+09:00",
+  "slack_channel": "C0B8YN010J2",
+  "slack_message_url": "",
+  "supplemental_text": "",
+  "warnings": [
+    "顧客名や会社名らしき情報が含まれている可能性があります。"
+  ],
+  "extracted": {
+    "private_or_sensitive_info_to_hide": [
+      "顧客名や会社名らしき情報が含まれている可能性があります。"
+    ],
+    "media_theme": "",
+    "article_main_message": "",
+    "content_strategy": {
+      "main_channel": "note",
+      "support_channels": [
+        "X/Threads"
+      ],
+      "corporate_site_role": "会社情報・サービス説明・問い合わせの受け皿",
+      "note_role": "有益情報、実践者視点、信頼形成、有料マニュアル導線、コミュニティ形成",
+      "x_threads_role": "note記事の拡散、日々の実践ログ、読者との接点づくり",
+      "free_note_article_themes": [
+        "AI業務効率化の実践ログを、会社の資産に変える方法",
+        "非エンジニアでもAI業務効率化を始めるための最初の一歩",
+        "ChatGPTやCodexとの相談内容を流さず、Notion DBに残す理由",
+        "完全自動化ではなく、半自動化から始めるべき理由",
+        "AI業務効率化ツールをGitHubテンプレートと有料マニュアルに展開する構想"
+      ],
+      "paid_manual_themes": [
+        "GitHubテンプレートを使ったAI業務効率化ツール導入マニュアル",
+        "Notion DB連携ツールの導入手順",
+        "Slack / Gmail / freee / Notion連携の設定手順",
+        "OpenAI API / Claude API設定手順",
+        "Codex依頼文テンプレート集",
+        "push後の確認手順とテスト観点",
+        "非エンジニア向けエラー対処集"
+      ],
+      "x_threads_post_ideas": [
+        "AI業務効率化の記事は、共感だけでは読まれない。まず読者の課題を解決する必要がある。",
+        "無料noteでは必要性と最初の一歩を出し、有料マニュアルでは最後まで実装できる地図を出すことにした。",
+        "非エンジニアにとって価値があるのは、コードそのものより、どの画面で何を設定すればいいかの手順だった。",
+        "GitHubテンプレートと導入マニュアルを組み合わせれば、小さなAI業務効率化ツールも商品化できるかもしれない。",
+        "AI業務効率化は作って終わりではなく、発信・マニュアル・支援サービスまで展開できる。"
+      ]
+    },
+    "wordpress_article_angles": "",
+    "note_article_angles": "",
+    "x_threads_post_ideas": ""
+  }
+}
