@@ -1,0 +1,100 @@
+{
+  "pending_key": "C0B8YN010J2-1780964648.796889",
+  "dedupe_key": "Ev0B966T6D18",
+  "status": "pending",
+  "created_at": "2026-06-09T00:24:11.134Z",
+  "channel": "C0B8YN010J2",
+  "thread_ts": "1780964648.796889",
+  "user": "U08H3PUHUAX",
+  "payload": {
+    "title": "Slack長文JSON保存テスト",
+    "knowledge_type": "notes",
+    "project_key": "slack-json",
+    "project_key_source": "json.title",
+    "category": "AI業務効率化 / ナレッジ管理",
+    "status": "draft",
+    "tools": [
+      "ChatGPT",
+      "Codex",
+      "Slack",
+      "GitHub",
+      "Netlify"
+    ],
+    "summary": "[object Object]",
+    "input_type": "json",
+    "body": "{\n  \"title\": \"Slack長文JSON保存テスト\",\n  \"status\": \"draft\",\n  \"category\": \"AI業務効率化 / ナレッジ管理\",\n  \"theme\": \"Slack経由でJSONをGitHubにナレッジ保存できるか確認する\",\n  \"summary\": {\n    \"facts\": [\n      \"Slackからナレッジ候補を投稿している。\",\n      \"保存前に確認カードを表示する運用にしている。\",\n      \"有効JSONの場合はraw.jsonとして保存したい。\"\n    ],\n    \"inferences\": [\n      \"Slackを入口にすることで、スマホからでもナレッジ保存しやすくなる。\"\n    ]\n  },\n  \"tools_used\": [\n    \"ChatGPT\",\n    \"Codex\",\n    \"Slack\",\n    \"GitHub\",\n    \"Netlify\"\n  ],\n  \"private_or_sensitive_info_to_hide\": [\n    \"APIキー\",\n    \"トークン\",\n    \"顧客情報\",\n    \"個人情報\"\n  ]\n}",
+    "supplemental_text": "",
+    "save_mode": "upsert",
+    "source": "slack_event",
+    "slack_channel": "C0B8YN010J2",
+    "slack_ts": "1780964648.796889",
+    "slack_message_url": "",
+    "slack_event_id": "Ev0B966T6D18",
+    "json_parse_warning": "",
+    "warnings": [
+      "顧客名や会社名らしき情報が含まれている可能性があります。"
+    ],
+    "extracted": {
+      "private_or_sensitive_info_to_hide": [
+        "APIキー",
+        "トークン",
+        "顧客情報",
+        "個人情報"
+      ],
+      "media_theme": "",
+      "article_main_message": "",
+      "content_strategy": "",
+      "wordpress_article_angles": "",
+      "note_article_angles": "",
+      "x_threads_post_ideas": ""
+    },
+    "created_at": "",
+    "updated_at": "",
+    "theme": "Slack経由でJSONをGitHubにナレッジ保存できるか確認する"
+  },
+  "candidates": [
+    {
+      "title": "Slack自動保存テストです。",
+      "project_key": "slack",
+      "knowledge_type": "notes",
+      "category": "未分類",
+      "status": "saved",
+      "tools": [
+        "ChatGPT",
+        "Codex",
+        "GitHub",
+        "Slack"
+      ],
+      "summary": "Slack自動保存テストです。\nChatGPTとCodexを使って、Slack投稿をGitHubにナレッジ保存できるか確認しています。",
+      "path": "knowledge/notes/slack/index.md",
+      "raw_json_path": "knowledge/notes/slack/raw.json",
+      "raw_md_path": "knowledge/notes/slack/raw.md",
+      "raw_txt_path": "knowledge/notes/slack/raw.txt",
+      "raw_path": "knowledge/notes/slack/raw.txt",
+      "created": "2026-06-08T22:15:57+09:00",
+      "updated": "2026-06-08T22:15:57+09:00",
+      "score": 1,
+      "similar_reason": "本文の語句が近い"
+    },
+    {
+      "title": "テストナレッジ",
+      "project_key": "test-knowledge",
+      "knowledge_type": "learnings",
+      "category": "AI業務効率化",
+      "status": "saved",
+      "tools": [
+        "Slack",
+        "GitHub",
+        "Netlify"
+      ],
+      "summary": "Slack経由でGitHubにナレッジ保存できるか確認するテストです。",
+      "path": "knowledge/learnings/test-knowledge/index.md",
+      "raw_json_path": "knowledge/learnings/test-knowledge/raw.json",
+      "raw_txt_path": "knowledge/learnings/test-knowledge/raw.txt",
+      "created": "2026-06-08T21:34:09+09:00",
+      "updated": "2026-06-08T21:34:09+09:00",
+      "score": 1,
+      "similar_reason": "本文の語句が近い"
+    }
+  ]
+}
