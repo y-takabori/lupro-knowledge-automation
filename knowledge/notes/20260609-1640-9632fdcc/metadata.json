@@ -1,0 +1,62 @@
+{
+  "title": "タイトル案",
+  "project_key": "20260609-1640-9632fdcc",
+  "project_key_source": "markdown_heading",
+  "knowledge_type": "notes",
+  "category": "未分類",
+  "status": "saved",
+  "tools": [
+    "ChatGPT",
+    "Codex",
+    "GitHub",
+    "Netlify",
+    "Slack",
+    "Notion",
+    "Google Sheets",
+    "WordPress",
+    "note",
+    "X",
+    "Threads"
+  ],
+  "summary": "---\r\n\r\ntitle: \"AI業務効率化の実践ログを、Slack・GitHub・Google Sheetsで会社の資産に変える\"\r\ncategory: \"AI業務効率化 / ナレッジ管理 / 発信戦略 / 商品設計\"\r\nstatus: \"draft\"\r\ntheme: \"ChatGPTやCodexとの試行錯誤を、Sl",
+  "theme": "",
+  "source": "slack_event",
+  "source_type": "slack_text_and_file",
+  "input_type": "plain_text",
+  "file_name": "AI業務効率化の実践ログを、Slack・GitHub・Google Sheetsで会社の資産に変える.txt",
+  "file_size": 30480,
+  "char_count": 13684,
+  "has_attachment": true,
+  "has_supplemental_text": true,
+  "parsed_json_available": false,
+  "save_mode": "new",
+  "path": "knowledge/notes/20260609-1640-9632fdcc/index.md",
+  "raw_json_path": "knowledge/notes/20260609-1640-9632fdcc/raw.json",
+  "raw_md_path": "knowledge/notes/20260609-1640-9632fdcc/raw.md",
+  "raw_txt_path": "knowledge/notes/20260609-1640-9632fdcc/raw.txt",
+  "supplemental_path": "knowledge/notes/20260609-1640-9632fdcc/supplemental.md",
+  "raw_path": "knowledge/notes/20260609-1640-9632fdcc/raw.txt",
+  "created": "2026-06-09T16:40:48+09:00",
+  "updated": "2026-06-09T16:40:48+09:00",
+  "created_at": "2026-06-09T16:40:48+09:00",
+  "updated_at": "2026-06-09T16:40:48+09:00",
+  "slack_channel": "C0B8YN010J2",
+  "slack_message_url": "",
+  "supplemental_text": "新しいナレッジです。登録できますか？",
+  "warnings": [
+    "APIキー、secret、tokenらしき文字列が含まれている可能性があります。",
+    "顧客名や会社名らしき情報が含まれている可能性があります。"
+  ],
+  "extracted": {
+    "private_or_sensitive_info_to_hide": [
+      "APIキー、secret、tokenらしき文字列が含まれている可能性があります。",
+      "顧客名や会社名らしき情報が含まれている可能性があります。"
+    ],
+    "media_theme": "",
+    "article_main_message": "",
+    "content_strategy": "",
+    "wordpress_article_angles": "",
+    "note_article_angles": "",
+    "x_threads_post_ideas": ""
+  }
+}
