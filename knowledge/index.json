@@ -1,5 +1,29 @@
 [
   {
+    "title": "Google Sheets連携テスト",
+    "project_key": "google-sheets",
+    "knowledge_type": "notes",
+    "category": "未分類",
+    "status": "saved",
+    "tools": [
+      "ChatGPT",
+      "Codex",
+      "GitHub",
+      "Netlify",
+      "Slack",
+      "Google Sheets"
+    ],
+    "summary": "# Google Sheets連携テスト\n\nSlackから保存したナレッジが、GitHubだけでなくGoogleスプレッドシートにも一覧化されるか確認しています。\n\n目的：\nナレッジ一覧と更新履歴に自動で行が追加されることを確認する。\n\n使用ツール：\nChatGPT, Codex, Slack, GitHub, Net",
+    "theme": "",
+    "path": "knowledge/notes/google-sheets/index.md",
+    "raw_json_path": "knowledge/notes/google-sheets/raw.json",
+    "raw_md_path": "knowledge/notes/google-sheets/raw.md",
+    "raw_txt_path": "knowledge/notes/google-sheets/raw.txt",
+    "raw_path": "knowledge/notes/google-sheets/raw.md",
+    "created": "2026-06-09T09:57:47+09:00",
+    "updated": "2026-06-09T09:57:47+09:00"
+  },
+  {
     "title": "Slack確認カード改善テスト 追記",
     "project_key": "20260609-0758-12345b5e",
     "knowledge_type": "notes",
