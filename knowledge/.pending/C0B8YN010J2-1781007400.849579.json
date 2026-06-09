@@ -1,7 +1,7 @@
 {
   "pending_key": "C0B8YN010J2-1781007400.849579",
   "dedupe_key": "Ev0B9E28K892",
-  "status": "pending",
+  "status": "saved",
   "created_at": "2026-06-09T12:16:43.436Z",
   "channel": "C0B8YN010J2",
   "thread_ts": "1781007400.849579",
@@ -139,5 +139,38 @@
       "similar_reason": "本文の語句が近い"
     }
   ],
-  "confirmation_message_ts": "1781007404.494539"
+  "confirmation_message_ts": "1781007404.494539",
+  "updated_at": "2026-06-09T12:19:37.528Z",
+  "result": {
+    "message": "Saved knowledge to GitHub.",
+    "title": "AI業務効率化の実践ログを、Slack・GitHub・Google Sheetsで会社の資産に変える",
+    "knowledge_type": "notes",
+    "project_key": "ai-knowledge-slack-github-sheets",
+    "project_key_source": "frontmatter.title",
+    "save_mode": "upsert",
+    "index_path": "knowledge/notes/ai-knowledge-slack-github-sheets/index.md",
+    "raw_json_path": "knowledge/notes/ai-knowledge-slack-github-sheets/raw.json",
+    "raw_md_path": "knowledge/notes/ai-knowledge-slack-github-sheets/raw.md",
+    "raw_txt_path": "knowledge/notes/ai-knowledge-slack-github-sheets/raw.txt",
+    "raw_path": "knowledge/notes/ai-knowledge-slack-github-sheets/raw.txt",
+    "metadata_path": "knowledge/notes/ai-knowledge-slack-github-sheets/metadata.json",
+    "supplemental_path": "knowledge/notes/ai-knowledge-slack-github-sheets/supplemental.md",
+    "update_path": "",
+    "update_json_path": "",
+    "update_txt_path": "",
+    "created": "2026-06-09T21:19:29+09:00",
+    "updated": "2026-06-09T21:19:29+09:00",
+    "index_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-knowledge-slack-github-sheets/index.md",
+    "raw_json_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-knowledge-slack-github-sheets/raw.json",
+    "raw_md_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-knowledge-slack-github-sheets/raw.md",
+    "raw_txt_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-knowledge-slack-github-sheets/raw.txt",
+    "raw_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-knowledge-slack-github-sheets/raw.txt",
+    "metadata_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-knowledge-slack-github-sheets/metadata.json",
+    "supplemental_url": "",
+    "update_url": "",
+    "update_json_url": "",
+    "update_txt_url": "",
+    "is_update": false,
+    "json_parse_warning": ""
+  }
 }
