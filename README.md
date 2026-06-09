@@ -772,6 +772,8 @@ Slack private file URLやBot Token、本文全文はログや確認カードに�
 
 Slackに `.txt` / `.md` / `.json` を添付した場合、Botはファイル本文を主本文として読み取り、Slack本文は補足メモとして扱います。推定優先順位は以下です。
 
+`.txt` 添付でも本文冒頭に YAML frontmatter があれば `.md` と同じように解析し、`title` / `category` / `status` を本文見出しより優先します。
+
 - `title`: JSON内の `title` / `project_title`、YAML frontmatterの `title`、Markdownの最初の `#` 見出し、本文中の `タイトル案:` / `タイトル:`、ファイル名、最後に `無題ナレッジ`
 - `project_key`: JSONまたはfrontmatterの `project_key`、title由来slug、Markdown見出し由来slug、ファイル名由来slug、本文キーワード由来slug、最後に `YYYYMMDD-HHmm-hash`
 - `category`: JSONまたはfrontmatterの `category`、本文中の `カテゴリ:`、本文キーワード推定、最後に `未分類`

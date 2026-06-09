@@ -279,13 +279,14 @@ function humanText(value, fallback = "") {
 }
 
 function extractYamlFrontmatter(text) {
-  const match = String(text || "").match(/^---\s*\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  const source = String(text || "").replace(/^\uFEFF/, "");
+  const match = source.match(/^\s*---\s*\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   if (!match) return {};
   const frontmatter = {};
   for (const line of match[1].split(/\r?\n/)) {
     const item = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.+?)\s*$/);
     if (!item) continue;
-    frontmatter[item[1]] = item[2].replace(/^["']|["']$/g, "").trim();
+    frontmatter[item[1]] = normalizeSmartQuotes(item[2]).replace(/^["']|["']$/g, "").trim();
   }
   return frontmatter;
 }
@@ -295,6 +296,45 @@ function extractLabeledValue(text, labels) {
   const pattern = new RegExp(`^(?:${escaped})\\s*[:：]\\s*(.+)$`, "im");
   const match = String(text || "").match(pattern);
   return match?.[1]?.trim() || "";
+}
+
+function extractLabeledValueClean(text, labels) {
+  const escaped = labels.map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const pattern = new RegExp(`^(?:${escaped})\\s*[:：]\\s*(.+)$`, "im");
+  const match = String(text || "").match(pattern);
+  return match?.[1]?.trim() || "";
+}
+
+function markdownHeading(text) {
+  const generic = new Set([
+    "タイトル案",
+    "タイトル",
+    "要確認ポイント",
+    "概要",
+    "本文",
+    "メモ",
+    "補足",
+    "次にやること",
+    "公開時に伏せる情報"
+  ]);
+  const headings = Array.from(String(text || "").matchAll(/^#{1,6}\s+(.+)$/gm))
+    .map((match) => match[1].trim())
+    .filter(Boolean);
+  return headings.find((heading) => !generic.has(heading)) || "";
+}
+
+function isGenericSectionLabel(value) {
+  return [
+    "タイトル案",
+    "タイトル",
+    "要確認ポイント",
+    "概要",
+    "本文",
+    "メモ",
+    "補足",
+    "次にやること",
+    "公開時に伏せる情報"
+  ].includes(String(value || "").trim());
 }
 
 function filenameTitle(fileName) {
@@ -308,6 +348,8 @@ function keywordSlugTokens(text) {
   const source = String(text || "").toLowerCase();
   const dictionary = [
     [/lupro/i, "lupro"],
+    [/\bai\b|AI|ＡＩ/i, "ai"],
+    [/実践ログ|会社の資産|資産化/i, "knowledge"],
     [/slack/i, "slack"],
     [/github/i, "github"],
     [/google\s*sheets?|スプレッドシート|シート/i, "sheets"],
@@ -340,11 +382,19 @@ function keywordSlugTokens(text) {
 
 function slugFromKnownTokens(...values) {
   const tokens = keywordSlugTokens(values.filter(Boolean).join(" "));
-  if (tokens.length >= 2) return tokens.slice(0, 5).join("-");
+  const priority = ["lupro", "ai", "knowledge", "slack", "github", "sheets", "note", "json", "save", "test", "automation", "management", "improvement", "content", "paid", "manual", "sales", "template"];
+  const ordered = [
+    ...priority.filter((token) => tokens.includes(token)),
+    ...tokens.filter((token) => !priority.includes(token))
+  ];
+  if (ordered.length >= 2) return ordered.slice(0, 5).join("-");
   return "";
 }
 
 function slugifyMeaningful(value, fallbackSource = "") {
+  const tokenSlug = slugFromKnownTokens(value, fallbackSource);
+  if (tokenSlug && /[^\x00-\x7F]/.test(String(value || "")) && !genericProjectKey(tokenSlug)) return tokenSlug;
+  if (tokenSlug.split("-").length >= 4 && !genericProjectKey(tokenSlug)) return tokenSlug;
   const ascii = String(value || "")
     .normalize("NFKD")
     .toLowerCase()
@@ -352,7 +402,6 @@ function slugifyMeaningful(value, fallbackSource = "") {
     .replace(/^-+|-+$/g, "")
     .slice(0, 70);
   if (ascii && !genericProjectKey(ascii)) return ascii;
-  const tokenSlug = slugFromKnownTokens(value, fallbackSource);
   if (tokenSlug && !genericProjectKey(tokenSlug)) return tokenSlug;
   return "";
 }
@@ -385,7 +434,7 @@ function inferCategoryFromText(text) {
   return categories.length ? [...new Set(categories)].slice(0, 3).join(" / ") : "未分類";
 }
 
-function inferProjectKey({ parsed, frontmatter, title, heading, fileName, body }) {
+function inferProjectKey({ parsed, frontmatter, title, titleSource, heading, fileName, body }) {
   const explicit = firstNonEmpty(parsed.project_key, frontmatter.project_key);
   if (explicit) {
     return {
@@ -394,7 +443,7 @@ function inferProjectKey({ parsed, frontmatter, title, heading, fileName, body }
     };
   }
   const titleSlug = slugifyMeaningful(title);
-  if (titleSlug) return { projectKey: titleSlug, source: "title_slug" };
+  if (titleSlug) return { projectKey: titleSlug, source: titleSource === "frontmatter.title" ? "frontmatter.title" : "title_slug" };
   const headingSlug = slugifyMeaningful(heading);
   if (headingSlug) return { projectKey: headingSlug, source: "markdown_heading_slug" };
   const fileSlug = slugifyMeaningful(filenameTitle(fileName));
@@ -534,7 +583,7 @@ function buildAutoKnowledgePayloadLegacy({ text, fileName = "", supplementalText
   };
 }
 
-export function buildAutoKnowledgePayload({ text, fileName = "", supplementalText = "", source = "slack_event", slack = {} }) {
+function buildAutoKnowledgePayloadCurrent({ text, fileName = "", supplementalText = "", source = "slack_event", slack = {} }) {
   const body = String(text || "").trim();
   const supplemental = String(supplementalText || "").trim();
   const inputType = detectInputType(body, fileName);
@@ -636,6 +685,116 @@ export function buildAutoKnowledgePayload({ text, fileName = "", supplementalTex
   };
 }
 
+export function buildAutoKnowledgePayload({ text, fileName = "", supplementalText = "", source = "slack_event", slack = {} }) {
+  const body = String(text || "").replace(/^\uFEFF/, "").trim();
+  const supplemental = String(supplementalText || "").trim();
+  const inputType = detectInputType(body, fileName);
+  const jsonResult = inputType === "json" ? parseFlexibleJson(body) : null;
+  const parsed = jsonResult?.valid && isPlainObject(jsonResult.parsed) ? jsonResult.parsed : {};
+  const frontmatter = extractYamlFrontmatter(body);
+  const hasFrontmatter = Object.keys(frontmatter).length > 0;
+  const heading = markdownHeading(body);
+  const labeledTitle = extractLabeledValueClean(body, ["タイトル案", "タイトル", "title"]);
+  const labeledCategory = extractLabeledValueClean(body, ["カテゴリ", "category"]);
+  const labeledSummary = extractLabeledValueClean(body, ["概要", "summary"]);
+  const firstParagraph = body
+    .replace(/^\s*---[\s\S]*?\r?\n---/, "")
+    .split(/\r?\n\s*\r?\n/)
+    .map((item) => item.split(/\r?\n/).filter((line) => !/^#{1,6}\s+/.test(line.trim())).join("\n"))
+    .map((item) => item.replace(/^[-*\s]+/, "").trim())
+    .filter((item) => !isGenericSectionLabel(item))
+    .find(Boolean) || "";
+
+  const titleCandidates = [
+    ["json.project_key_title", ""],
+    ["json.title", parsed.title],
+    ["json.project_title", parsed.project_title],
+    ["frontmatter.title", frontmatter.title],
+    ["markdown_heading", heading],
+    ["labeled_title", labeledTitle],
+    ["file_name", filenameTitle(fileName)],
+    ["fallback", "無題ナレッジ"]
+  ];
+  const titleCandidate = titleCandidates.find(([, value]) => firstNonEmpty(value)) || titleCandidates.at(-1);
+  const titleSource = titleCandidate[0];
+  const title = humanText(titleCandidate[1], "無題ナレッジ");
+  const category = humanText(firstNonEmpty(
+    parsed.category,
+    parsed.project_category,
+    frontmatter.category,
+    labeledCategory,
+    inferCategoryFromText(`${title}\n${body}`)
+  ), "未分類");
+  const rawStatus = humanText(firstNonEmpty(parsed.status, frontmatter.status, "saved"), "saved");
+  const status = statuses.has(rawStatus) ? rawStatus : "saved";
+  const summary = humanText(firstNonEmpty(
+    parsed.summary,
+    parsed.implementation_summary,
+    parsed.article_main_message,
+    frontmatter.summary,
+    labeledSummary,
+    firstParagraph ? firstParagraph.slice(0, 280) : ""
+  ), "概要未設定");
+  const rawKnowledgeType = String(firstNonEmpty(parsed.knowledge_type, parsed.type, frontmatter.knowledge_type, "notes"));
+  const knowledgeType = knowledgeTypeFolders[rawKnowledgeType] ? rawKnowledgeType : "notes";
+  const { projectKey, source: projectKeySource } = inferProjectKey({ parsed, frontmatter, title, titleSource, heading, fileName, body });
+  const tools = extractKnownTools(body, parsed.tools_used || parsed.tools || frontmatter.tools || "");
+  const warnings = detectSensitiveWarnings(`${body}\n${supplemental}`);
+  const hasAttachment = Boolean(slack.file_name || fileName);
+  const sourceType = slack.source_type || (
+    hasAttachment && supplemental ? "slack_text_and_file" :
+      hasAttachment ? "slack_file" :
+        source === "web" ? "web_paste" : "slack_text"
+  );
+  const jsonParseWarning = inputType === "json" && jsonResult && !jsonResult.valid
+    ? "JSONとしては解析できませんでしたが、テキストとして保存できます。"
+    : "";
+
+  return {
+    title,
+    title_source: titleSource,
+    knowledge_type: knowledgeType,
+    project_key: projectKey,
+    project_key_source: projectKeySource,
+    category,
+    status,
+    tools,
+    summary,
+    input_type: inputType,
+    has_frontmatter: hasFrontmatter,
+    body,
+    supplemental_text: supplemental,
+    save_mode: "upsert",
+    source,
+    source_type: sourceType,
+    file_name: slack.file_name || fileName || "",
+    file_size: Number(slack.file_size || 0) || 0,
+    char_count: body.length,
+    has_attachment: hasAttachment,
+    has_supplemental_text: Boolean(supplemental),
+    parsed_json_available: Boolean(jsonResult?.valid),
+    slack_channel: slack.channel || "",
+    slack_ts: slack.ts || "",
+    slack_user: slack.user || "",
+    slack_message_url: slack.message_url || "",
+    slack_event_id: slack.event_id || "",
+    json_parse_warning: jsonParseWarning,
+    warnings,
+    extracted: {
+      private_or_sensitive_info_to_hide: parsed.private_or_sensitive_info_to_hide || warnings,
+      media_theme: parsed.media_theme || parsed.theme || "",
+      article_main_message: humanText(parsed.article_main_message),
+      content_strategy: humanText(parsed.content_strategy),
+      wordpress_article_angles: parsed.wordpress_article_angles || "",
+      note_article_angles: parsed.note_article_angles || "",
+      x_threads_post_ideas: parsed.x_threads_post_ideas || ""
+    },
+    created_at: humanText(parsed.created_at || frontmatter.created_at),
+    updated_at: humanText(parsed.updated_at || frontmatter.updated_at),
+    theme: humanText(parsed.media_theme || parsed.theme || frontmatter.theme)
+  };
+}
+
 function yamlQuote(value) {
   return JSON.stringify(String(value || ""));
 }
@@ -673,12 +832,14 @@ export function normalizeKnowledgePayload(input) {
     file_size: Number(input.file_size || 0) || 0,
     char_count: Number(input.char_count || 0) || 0,
     has_attachment: Boolean(input.has_attachment),
+    has_frontmatter: Boolean(input.has_frontmatter),
     has_supplemental_text: Boolean(input.has_supplemental_text || input.supplemental_text),
     parsed_json_available: Boolean(input.parsed_json_available),
     save_mode: String(input.save_mode || "upsert").trim(),
     source: String(input.source || "web").trim(),
     file_reference: String(input.file_reference || "").trim(),
     project_key_source: String(input.project_key_source || "").trim(),
+    title_source: String(input.title_source || "").trim(),
     created_at: String(input.created_at || "").trim(),
     updated_at: String(input.updated_at || "").trim(),
     theme: String(input.theme || "").trim(),
@@ -925,6 +1086,7 @@ function buildMetadata(payload, created, updated, paths, existingMetadata = null
     title: payload.title,
     project_key: payload.project_key,
     project_key_source: payload.project_key_source || existingMetadata?.project_key_source || "",
+    title_source: payload.title_source || existingMetadata?.title_source || "",
     knowledge_type: payload.knowledge_type,
     category: payload.category,
     status: payload.status,
@@ -938,6 +1100,7 @@ function buildMetadata(payload, created, updated, paths, existingMetadata = null
     file_size: payload.file_size,
     char_count: payload.char_count || payload.body.length,
     has_attachment: payload.has_attachment,
+    has_frontmatter: payload.has_frontmatter,
     has_supplemental_text: payload.has_supplemental_text || Boolean(payload.supplemental_text),
     parsed_json_available: payload.parsed_json_available || false,
     save_mode: payload.save_mode,
@@ -984,6 +1147,7 @@ function indexEntry(metadata) {
     file_size: metadata.file_size,
     char_count: metadata.char_count,
     has_attachment: metadata.has_attachment,
+    has_frontmatter: metadata.has_frontmatter,
     has_supplemental_text: metadata.has_supplemental_text,
     note_output_url: outputsSummary.note_output_url,
     x_threads_output_url: outputsSummary.x_threads_output_url,

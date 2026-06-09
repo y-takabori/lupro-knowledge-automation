@@ -384,6 +384,12 @@ function confirmationBlocks(pending) {
   return [
     ...(attachmentContextBlock ? [attachmentContextBlock] : []),
     {
+      type: "context",
+      elements: [
+        mrkdwn(`frontmatter検出: ${payload.has_frontmatter ? "あり" : "なし"}`)
+      ]
+    },
+    {
       type: "section",
       text: mrkdwn([
         "*推定内容*",
