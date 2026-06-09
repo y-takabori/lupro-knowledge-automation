@@ -1,2 +1,0 @@
-Slack自動保存テストです。
-ChatGPTとCodexを使って、Slack投稿をGitHubにナレッジ保存できるか確認しています。

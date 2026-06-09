@@ -546,6 +546,14 @@ export class GitHubContentsClient {
     return { sha: data.sha, content, html_url: data.html_url };
   }
 
+  async getContent(path) {
+    const { response, data } = await this.request(`${path}?ref=${encodeURIComponent(this.branch)}`, {
+      method: "GET"
+    });
+    if (response.status === 404) return null;
+    return data;
+  }
+
   async putFile(path, content, message) {
     const current = await this.getFile(path);
     const body = {
@@ -559,6 +567,35 @@ export class GitHubContentsClient {
       body: JSON.stringify(body)
     });
     return data?.content || {};
+  }
+
+  async deleteFile(path, message) {
+    const current = await this.getFile(path);
+    if (!current?.sha) return false;
+    await this.request(path, {
+      method: "DELETE",
+      body: JSON.stringify({
+        message,
+        sha: current.sha,
+        branch: this.branch
+      })
+    });
+    return true;
+  }
+
+  async deletePath(path, message) {
+    const content = await this.getContent(path);
+    if (!content) return [];
+    if (Array.isArray(content)) {
+      const deleted = [];
+      const items = [...content].sort((a, b) => String(b.path).localeCompare(String(a.path)));
+      for (const item of items) {
+        deleted.push(...await this.deletePath(item.path, message));
+      }
+      return deleted;
+    }
+    const ok = await this.deleteFile(path, message);
+    return ok ? [path] : [];
   }
 }
 
@@ -656,6 +693,144 @@ async function updateGlobalIndex(client, metadata) {
   }
   entries.sort((a, b) => String(b.updated).localeCompare(String(a.updated)));
   await client.putFile(indexPath, `${JSON.stringify(entries, null, 2)}\n`, `Update knowledge index for ${metadata.project_key}`);
+}
+
+async function removeIndexEntry(client, indexPath, knowledgeType, projectKey) {
+  const current = await client.getFile(indexPath);
+  if (!current?.content) {
+    return { removed: false, missing: true };
+  }
+  let entries = [];
+  try {
+    entries = JSON.parse(current.content);
+  } catch {
+    return { removed: false, missing: false, invalid: true };
+  }
+  if (!Array.isArray(entries)) {
+    return { removed: false, missing: false, invalid: true };
+  }
+  const next = entries.filter((entry) => !(
+    entry?.project_key === projectKey &&
+    (!knowledgeType || entry?.knowledge_type === knowledgeType)
+  ));
+  if (next.length === entries.length) {
+    return { removed: false, missing: false };
+  }
+  await client.putFile(indexPath, `${JSON.stringify(next, null, 2)}\n`, `Remove knowledge index entry for ${projectKey}`);
+  return { removed: true, missing: false };
+}
+
+function deletionMetadata(entry, metadata, deletedAt, source, deletedPaths) {
+  return {
+    title: metadata?.title || entry?.title || "",
+    project_key: metadata?.project_key || entry?.project_key || "",
+    knowledge_type: metadata?.knowledge_type || entry?.knowledge_type || "",
+    category: metadata?.category || entry?.category || "",
+    status: metadata?.status || entry?.status || "",
+    path: metadata?.path || entry?.path || "",
+    raw_path: metadata?.raw_path || entry?.raw_path || "",
+    metadata_path: metadata?.metadata_path || "",
+    created: metadata?.created || entry?.created || "",
+    updated: metadata?.updated || entry?.updated || "",
+    deleted_at: deletedAt,
+    deleted_source: source,
+    deleted_paths: deletedPaths
+  };
+}
+
+export async function deleteKnowledgeFromGitHub(input) {
+  const knowledgeType = String(input.knowledge_type || "").trim();
+  const projectKey = String(input.project_key || "").trim();
+  if (!knowledgeTypeFolders[knowledgeType]) {
+    const error = new Error("knowledge_type is invalid.");
+    error.status = 400;
+    throw error;
+  }
+  if (!/^[a-zA-Z0-9-]+$/.test(projectKey)) {
+    const error = new Error("project_key must contain only half-width letters, numbers, and hyphens.");
+    error.status = 400;
+    throw error;
+  }
+
+  const client = new GitHubContentsClient(requireGitHubConfig());
+  const folder = knowledgeTypeFolders[knowledgeType];
+  const basePath = `knowledge/${folder}/${projectKey}`;
+  const metadataPath = `${basePath}/metadata.json`;
+  const indexPath = `${basePath}/index.md`;
+  const tombstonePath = `knowledge/.deleted/${folder}/${projectKey}/metadata.json`;
+  const htmlBase = `https://github.com/${env("GITHUB_OWNER")}/${env("GITHUB_REPO")}/blob/${env("GITHUB_BRANCH") || "main"}`;
+  const deletedAt = nowJst();
+
+  const globalIndex = await client.getFile("knowledge/index.json");
+  let globalEntries = [];
+  if (globalIndex?.content) {
+    try {
+      globalEntries = JSON.parse(globalIndex.content);
+    } catch {
+      globalEntries = [];
+    }
+  }
+  const entry = Array.isArray(globalEntries)
+    ? globalEntries.find((item) => item?.knowledge_type === knowledgeType && item?.project_key === projectKey)
+    : null;
+
+  const metadataFile = await client.getFile(metadataPath);
+  let metadata = null;
+  if (metadataFile?.content) {
+    try {
+      metadata = JSON.parse(metadataFile.content);
+    } catch {
+      metadata = null;
+    }
+  }
+  const tombstoneFile = await client.getFile(tombstonePath);
+  let tombstoneMetadata = null;
+  if (tombstoneFile?.content) {
+    try {
+      tombstoneMetadata = JSON.parse(tombstoneFile.content);
+    } catch {
+      tombstoneMetadata = null;
+    }
+  }
+
+  const exists = Boolean(await client.getContent(basePath));
+  if (!exists && !entry && !tombstoneMetadata) {
+    const error = new Error("Knowledge was not found.");
+    error.status = 404;
+    throw error;
+  }
+
+  const deletedPaths = exists
+    ? await client.deletePath(basePath, `Delete knowledge ${knowledgeType}/${projectKey}`)
+    : [];
+  const tombstone = deletionMetadata(entry || tombstoneMetadata, metadata || tombstoneMetadata, deletedAt, input.source || "slack", deletedPaths);
+  await client.putFile(
+    tombstonePath,
+    `${JSON.stringify(tombstone, null, 2)}\n`,
+    `Record deleted knowledge ${knowledgeType}/${projectKey}`
+  );
+
+  const globalIndexResult = await removeIndexEntry(client, "knowledge/index.json", knowledgeType, projectKey);
+  const typeIndexResult = await removeIndexEntry(client, `knowledge/${folder}/index.json`, knowledgeType, projectKey);
+
+  return {
+    message: "Deleted knowledge from GitHub.",
+    title: tombstone.title || projectKey,
+    knowledge_type: knowledgeType,
+    project_key: projectKey,
+    save_mode: "delete",
+    source: input.source || "slack",
+    deleted_at: deletedAt,
+    deleted_paths: deletedPaths,
+    deleted_metadata_path: tombstonePath,
+    index_path: indexPath,
+    index_url: `${htmlBase}/${indexPath}`,
+    metadata_url: metadata?.path ? `${htmlBase}/${metadataPath}` : "",
+    raw_url: entry?.raw_path ? `${htmlBase}/${entry.raw_path}` : "",
+    global_index_removed: globalIndexResult.removed,
+    type_index_removed: typeIndexResult.removed,
+    type_index_missing: typeIndexResult.missing
+  };
 }
 
 export async function saveKnowledgeToGitHub(input) {

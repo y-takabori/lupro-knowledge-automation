@@ -623,6 +623,7 @@ knowledge/{knowledge_type}/{project_key}/updates/{timestamp}.json
 | Slack設定 | Request URL |
 | --- | --- |
 | Slash command `/knowledge-save` | `https://lupro-knowledge-automation.netlify.app/.netlify/functions/slack-knowledge` |
+| Slash command `/knowledge-delete` | `https://lupro-knowledge-automation.netlify.app/.netlify/functions/slack-events` |
 | Event Subscriptions | `https://lupro-knowledge-automation.netlify.app/.netlify/functions/slack-events` |
 | Interactivity & Shortcuts | `https://lupro-knowledge-automation.netlify.app/.netlify/functions/slack-events` |
 
@@ -631,3 +632,48 @@ knowledge/{knowledge_type}/{project_key}/updates/{timestamp}.json
 互換性のため、Interactivity URLが古い `slack-knowledge` のままでも確認ボタンpayloadは `slack-events` のhandlerへルーティングします。ただし運用上はInteractivity URLを `slack-events` に統一してください。
 
 Netlify Function logsでは、ボタン押下時に `slack_interaction_received`、通常投稿受信時に `slack_event_received` を出します。ログには `action_id`, `channel`, `user`, `event_id` などの識別情報だけを出し、APIキー、token、環境変数の実値は出しません。
+## Slackからの確認付き削除
+
+誤保存やテスト保存を安全に消すため、Slash command `/knowledge-delete` を追加できます。Request URLは `/.netlify/functions/slack-events` です。
+
+使い方:
+
+```text
+/knowledge-delete notes/slack
+/knowledge-delete notes google-sheets
+/knowledge-delete test-knowledge
+```
+
+`knowledge_type/project_key`、`knowledge_type project_key`、または一意な `project_key` で指定できます。`project_key` だけで複数候補が見つかる場合は削除せず、`knowledge_type` の指定を求めます。
+
+削除フロー:
+
+- Slash command実行時点では削除しません。
+- Botはタイトル、`project_key`、`knowledge_type`、GitHub保存先、Google Sheets反映予定を表示した確認カードを返します。
+- `削除する` を押した場合だけ、GitHub上の `knowledge/{type}/{project_key}/` を削除します。
+- 削除時は `knowledge/.deleted/{type}/{project_key}/metadata.json` に軽量な削除メタデータを残します。
+- `knowledge/index.json` と、存在する場合は `knowledge/{type}/index.json` から該当レコードを削除します。
+- Google Sheets連携が有効な場合、`ナレッジ一覧` の該当 `project_key` 行を削除し、`更新履歴` に `event_type=deleted`, `save_mode=delete` の履歴行を追加します。
+- Google Sheets更新に失敗しても、GitHub削除が成功していれば削除自体は成功扱いにし、Slackには `Google Sheets: 失敗: 理由` を表示します。
+- `キャンセル` を押した場合は、GitHub削除・Google Sheets更新を行いません。
+
+### テストナレッジの一括クリーンアップ
+
+今回のテストデータ6件は、保護付きFunction `/.netlify/functions/cleanup-test-knowledge` でも一括削除同期できます。デプロイ後、Netlify環境変数が入った状態で実行すると、GitHub側の削除確認とGoogle Sheets側の行削除・deleted履歴追加をまとめて行います。
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer ${KNOWLEDGE_SAVE_TOKEN}" \
+  https://YOUR-NETLIFY-SITE.netlify.app/.netlify/functions/cleanup-test-knowledge
+```
+
+対象は以下に固定しています。
+
+- `notes/google-sheets`
+- `notes/google-sheets-2`
+- `notes/google-sheets-3`
+- `notes/slack`
+- `notes/20260609-0758-12345b5e`
+- `learnings/test-knowledge`
+
+Sheets環境変数が未設定、またはSheets更新に失敗した場合でも、GitHub削除は成功扱いにし、レスポンス内の各targetにSheets結果を分けて返します。

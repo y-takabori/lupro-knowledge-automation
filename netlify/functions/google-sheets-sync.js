@@ -538,6 +538,28 @@ async function appendRow(config, token, sheetName, headers, row) {
   });
 }
 
+async function deleteSheetRow(config, token, sheetProperties, rowNumber) {
+  if (sheetProperties?.sheetId === undefined || !rowNumber) return false;
+  await googleRequest(config, token, `${sheetsApiBase(config)}:batchUpdate`, {
+    method: "POST",
+    body: JSON.stringify({
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId: sheetProperties.sheetId,
+              dimension: "ROWS",
+              startIndex: rowNumber - 1,
+              endIndex: rowNumber
+            }
+          }
+        }
+      ]
+    })
+  });
+  return true;
+}
+
 export async function syncKnowledgeToGoogleSheets(payload, result) {
   const config = getSheetsConfig();
   if (!config.enabled) {
@@ -598,5 +620,67 @@ export async function syncKnowledgeToGoogleSheets(payload, result) {
     events_sheet: config.eventsSheetName,
     event_type: type,
     note
+  };
+}
+
+export async function syncKnowledgeDeletionToGoogleSheets(entry, result) {
+  const config = getSheetsConfig();
+  if (!config.enabled) {
+    return {
+      ok: false,
+      skipped: true,
+      message: `Google Sheets environment variables are missing: ${config.missing.join(", ")}`
+    };
+  }
+
+  const token = await getAccessToken(config);
+  const knowledgeSheetProperties = await ensureHeaders(config, token, config.knowledgeSheetName, knowledgeHeaders);
+  const eventsSheetProperties = await ensureHeaders(config, token, config.eventsSheetName, eventHeaders);
+  await applySheetFormatting(config, token, config.knowledgeSheetName, knowledgeHeaders, "knowledge", knowledgeSheetProperties);
+  await applySheetFormatting(config, token, config.eventsSheetName, eventHeaders, "events", eventsSheetProperties);
+
+  const projectKey = result.project_key || entry.project_key || "";
+  const rows = await readRows(config, token, config.knowledgeSheetName, knowledgeHeaders);
+  const existingIndex = rows.findIndex((row) => row[0] === projectKey);
+  const rowDeleted = existingIndex >= 0
+    ? await deleteSheetRow(config, token, knowledgeSheetProperties, existingIndex + 2)
+    : false;
+  const eventResult = {
+    ...result,
+    title: result.title || entry.title || projectKey,
+    project_key: projectKey,
+    knowledge_type: result.knowledge_type || entry.knowledge_type || "",
+    save_mode: "delete",
+    updated: result.deleted_at || new Date().toISOString(),
+    index_url: result.index_url || entry.index_url || "",
+    raw_url: result.raw_url || entry.raw_url || "",
+    metadata_url: result.metadata_url || entry.metadata_url || "",
+    update_url: ""
+  };
+  const eventPayload = {
+    ...entry,
+    save_mode: "delete",
+    source: entry.source || result.source || "cleanup",
+    input_type: entry.input_type || "",
+    slack_user: entry.slack_user || "",
+    slack_channel: entry.slack_channel || "",
+    slack_ts: entry.slack_ts || "",
+    slack_event_id: entry.slack_event_id || `delete-${projectKey}-${eventResult.updated}`
+  };
+  await appendRow(config, token, config.eventsSheetName, eventHeaders, buildEventRow(eventPayload, eventResult, {
+    eventType: "deleted",
+    note: entry.note || "test knowledge cleanup"
+  }));
+
+  return {
+    ok: true,
+    skipped: false,
+    message: "Sheets deletion synced.",
+    url: `https://docs.google.com/spreadsheets/d/${config.spreadsheetId}`,
+    knowledge_sheet: config.knowledgeSheetName,
+    events_sheet: config.eventsSheetName,
+    event_type: "deleted",
+    row_deleted: rowDeleted,
+    note: rowDeleted ? "" : "project_key not found in knowledge sheet"
   };
 }

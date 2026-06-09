@@ -3,11 +3,13 @@ import {
   env,
   GitHubContentsClient,
   jsonResponse,
+  deleteKnowledgeFromGitHub,
+  knowledgeTypeFolders,
   parseTools,
   saveKnowledgeToGitHub,
   verifySlackSignature
 } from "./knowledge-archive-core.js";
-import { syncKnowledgeToGoogleSheets } from "./google-sheets-sync.js";
+import { syncKnowledgeDeletionToGoogleSheets, syncKnowledgeToGoogleSheets } from "./google-sheets-sync.js";
 
 const typeLabels = {
   learnings: "学び・気づき",
@@ -254,12 +256,17 @@ async function fetchSlackFileReference(reference) {
   return response.text();
 }
 
-async function postResponseUrl(responseUrl, text) {
+async function postResponseUrl(responseUrl, text, blocks = null, extra = {}) {
   if (!responseUrl) return;
   await fetch(responseUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ response_type: "ephemeral", text })
+    body: JSON.stringify({
+      response_type: "ephemeral",
+      text,
+      ...(blocks ? { blocks } : {}),
+      ...extra
+    })
   }).catch(() => {});
 }
 
@@ -519,6 +526,210 @@ async function finishConfirmationCard(pending, title, detail) {
     `${title}\n${detail}`,
     finishedBlocks(title, detail)
   );
+}
+
+function parseDeleteCommandText(text) {
+  const value = String(text || "").trim();
+  if (!value) return { error: "削除対象を指定してください。例: /knowledge-delete notes/slack" };
+  const first = value.split(/\s+/)[0] || "";
+  if (first.includes("/")) {
+    const [knowledgeType, projectKey] = first.split("/");
+    return { knowledge_type: knowledgeType, project_key: projectKey };
+  }
+  const parts = value.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return { knowledge_type: parts[0], project_key: parts[1] };
+  }
+  return { project_key: first };
+}
+
+async function findKnowledgeForDelete(client, parsed) {
+  const entries = await readJsonFile(client, "knowledge/index.json", []);
+  if (!Array.isArray(entries)) return { error: "knowledge/index.json を読み取れませんでした。" };
+  const matches = entries.filter((entry) => {
+    if (parsed.knowledge_type && entry.knowledge_type !== parsed.knowledge_type) return false;
+    return entry.project_key === parsed.project_key;
+  });
+  if (matches.length > 1) {
+    return { error: `project_key が複数見つかりました。knowledge_type も指定してください: ${matches.map((item) => `${item.knowledge_type}/${item.project_key}`).join(", ")}` };
+  }
+  if (matches.length === 0) {
+    const deletedTypes = parsed.knowledge_type
+      ? [parsed.knowledge_type]
+      : Object.keys(knowledgeTypeFolders);
+    const deletedMatches = [];
+    for (const knowledgeType of deletedTypes) {
+      const folder = knowledgeTypeFolders[knowledgeType];
+      if (!folder) continue;
+      const deleted = await readJsonFile(client, `knowledge/.deleted/${folder}/${parsed.project_key}/metadata.json`, null);
+      if (deleted?.project_key) deletedMatches.push({ knowledgeType, folder, deleted });
+    }
+    if (deletedMatches.length > 1) {
+      return { error: `削除済みproject_keyが複数見つかりました。knowledge_type も指定してください: ${deletedMatches.map((item) => `${item.knowledgeType}/${parsed.project_key}`).join(", ")}` };
+    }
+    if (deletedMatches.length === 1) {
+      const { knowledgeType, deleted } = deletedMatches[0];
+      return {
+        entry: {
+          title: deleted.title || parsed.project_key,
+          project_key: parsed.project_key,
+          knowledge_type: knowledgeType,
+          path: deleted.original_path || deleted.path || `knowledge/${knowledgeType}/${parsed.project_key}/index.md`,
+          already_deleted: true
+        }
+      };
+    }
+  }
+  if (matches.length === 0) return { error: "指定されたナレッジが見つかりませんでした。" };
+  return { entry: matches[0] };
+}
+
+function deletePendingKey(channel, user, knowledgeType, projectKey) {
+  return safePendingKey(`delete-${channel}-${user}-${knowledgeType}-${projectKey}`);
+}
+
+function deleteConfirmationBlocks(pending) {
+  const entry = pending.delete_entry;
+  return [
+    {
+      type: "section",
+      text: mrkdwn([
+        "*ナレッジ削除の確認です。まだ削除していません。*",
+        "",
+        `*タイトル:*\n${entry.title || entry.project_key}`,
+        `*project_key:*\n${entry.project_key}`,
+        `*knowledge_type:*\n${entry.knowledge_type}`,
+        `*GitHub保存先:*\n${entry.path || `knowledge/${entry.knowledge_type}/${entry.project_key}/index.md`}`,
+        "*Google Sheets反映予定:*\nナレッジ一覧の該当行を削除し、更新履歴に deleted イベントを追加します。",
+        "",
+        "削除する場合だけ、下の「削除する」を押してください。"
+      ].join("\n"))
+    },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: slackText("削除する"),
+          style: "danger",
+          action_id: "knowledge_delete_confirm",
+          value: pending.pending_key
+        },
+        {
+          type: "button",
+          text: slackText("キャンセル"),
+          action_id: "knowledge_delete_cancel",
+          value: pending.pending_key
+        }
+      ]
+    }
+  ];
+}
+
+function deleteResultMessage(result, sheets) {
+  return [
+    "削除しました。",
+    `title: ${result.title}`,
+    `knowledge_type: ${result.knowledge_type}`,
+    `project_key: ${result.project_key}`,
+    "GitHub: 削除成功",
+    `Google Sheets: ${sheetsStatusText(sheets)}`
+  ].join("\n");
+}
+
+async function createDeletePendingFromCommand(params) {
+  const responseUrl = params.get("response_url") || "";
+  const channel = params.get("channel_id") || "";
+  const user = params.get("user_id") || "";
+  const parsed = parseDeleteCommandText(params.get("text") || "");
+  if (parsed.error) {
+    await postResponseUrl(responseUrl, parsed.error);
+    return;
+  }
+  const client = getGitHubClient();
+  const found = await findKnowledgeForDelete(client, parsed);
+  if (found.error) {
+    await postResponseUrl(responseUrl, found.error);
+    return;
+  }
+  const entry = found.entry;
+  const pending = {
+    pending_key: deletePendingKey(channel, user, entry.knowledge_type, entry.project_key),
+    status: "delete_pending",
+    created_at: new Date().toISOString(),
+    channel,
+    user,
+    response_url: responseUrl,
+    delete_entry: entry
+  };
+  await putJsonFile(client, pendingPath(pending.pending_key), pending, `Create pending knowledge deletion ${entry.knowledge_type}/${entry.project_key}`);
+  await postResponseUrl(
+    responseUrl,
+    `削除確認: ${entry.knowledge_type}/${entry.project_key}`,
+    deleteConfirmationBlocks(pending),
+    { replace_original: true }
+  );
+}
+
+async function handleDeleteAction(payload) {
+  const action = payload.actions?.[0];
+  const pendingKey = action?.value || "";
+  const client = getGitHubClient();
+  const pending = await readJsonFile(client, pendingPath(pendingKey), null);
+  if (!pending || pending.status !== "delete_pending") {
+    await postResponseUrl(payload.response_url || "", "この削除確認は処理済み、または期限切れです。削除したい場合は、もう一度 /knowledge-delete を実行してください。");
+    return;
+  }
+
+  if (action.action_id === "knowledge_delete_cancel") {
+    await putJsonFile(client, pendingPath(pendingKey), {
+      ...pending,
+      status: "cancelled",
+      updated_at: new Date().toISOString()
+    }, `Cancel pending knowledge deletion ${pendingKey}`);
+    await postResponseUrl(
+      payload.response_url || pending.response_url || "",
+      "削除をキャンセルしました。\nGitHub削除・Google Sheets更新は行っていません。",
+      finishedBlocks("削除をキャンセルしました。", "GitHub削除・Google Sheets更新は行っていません。"),
+      { replace_original: true }
+    );
+    return;
+  }
+
+  try {
+    const entry = pending.delete_entry;
+    const result = await deleteKnowledgeFromGitHub({
+      knowledge_type: entry.knowledge_type,
+      project_key: entry.project_key,
+      source: "slack"
+    });
+    let sheets;
+    try {
+      sheets = await syncKnowledgeDeletionToGoogleSheets({
+        ...entry,
+        source: "slack",
+        slack_user: payload.user?.id || pending.user || "",
+        slack_channel: payload.channel?.id || pending.channel || "",
+        note: "slack knowledge deletion"
+      }, result);
+    } catch (error) {
+      sheets = { ok: false, skipped: false, message: error.message };
+    }
+    await putJsonFile(client, pendingPath(pendingKey), {
+      ...pending,
+      status: "deleted",
+      updated_at: new Date().toISOString(),
+      result
+    }, `Mark pending knowledge deletion ${pendingKey} deleted`);
+    await postResponseUrl(
+      payload.response_url || pending.response_url || "",
+      deleteResultMessage(result, sheets),
+      finishedBlocks("削除しました。", deleteResultMessage(result, sheets)),
+      { replace_original: true }
+    );
+  } catch (error) {
+    await postResponseUrl(payload.response_url || pending.response_url || "", `削除に失敗しました。\n${error.message}`);
+  }
 }
 
 async function createPendingFromEvent(body) {
@@ -884,6 +1095,11 @@ export async function handleSlackInteractivity(payload, context) {
   }
 
   const actionId = payload.actions?.[0]?.action_id || "";
+  if (actionId === "knowledge_delete_confirm" || actionId === "knowledge_delete_cancel") {
+    const work = handleDeleteAction(payload);
+    if (context?.waitUntil) context.waitUntil(work);
+    return jsonResponse(200, {});
+  }
   if (actionId === "knowledge_confirm_choose_existing" || actionId === "knowledge_confirm_edit") {
     await handleAction(payload);
     return jsonResponse(200, {});
@@ -919,6 +1135,20 @@ export default async (request, context) => {
       return jsonResponse(400, { error: "Invalid Slack payload." });
     }
     return handleSlackInteractivity(payload, context);
+  }
+  if (params.has("command")) {
+    if (params.get("command") === "/knowledge-delete") {
+      const work = createDeletePendingFromCommand(params);
+      if (context?.waitUntil) context.waitUntil(work);
+      return jsonResponse(200, {
+        response_type: "ephemeral",
+        text: "削除候補を確認しています。確認カードを表示します。"
+      });
+    }
+    return jsonResponse(200, {
+      response_type: "ephemeral",
+      text: "このSlash commandは slack-events では処理していません。"
+    });
   }
 
   let body;
