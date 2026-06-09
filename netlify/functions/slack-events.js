@@ -54,6 +54,10 @@ const inputLabels = {
   file: "ファイル"
 };
 
+const supportedKnowledgeFileExtensions = new Set([".json", ".md", ".txt"]);
+const oneMb = 1024 * 1024;
+const maxSlackKnowledgeFileBytes = 5 * oneMb;
+
 function slackText(text) {
   return { type: "plain_text", text: String(text || ""), emoji: false };
 }
@@ -160,6 +164,50 @@ async function getPermalink(channel, messageTs) {
   } catch {
     return "";
   }
+}
+
+function fileExtension(fileName = "") {
+  const lower = String(fileName || "").toLowerCase();
+  const dot = lower.lastIndexOf(".");
+  return dot >= 0 ? lower.slice(dot) : "";
+}
+
+function supportedKnowledgeFiles(files = []) {
+  return files.filter((file) => {
+    const name = file.name || file.title || "";
+    return supportedKnowledgeFileExtensions.has(fileExtension(name));
+  });
+}
+
+async function fetchSlackKnowledgeFile(file) {
+  const token = env("SLACK_BOT_TOKEN");
+  if (!token) throw new Error("SLACK_BOT_TOKEN is not configured.");
+  const name = file?.name || file?.title || "";
+  const size = Number(file?.size || 0) || 0;
+  const extension = fileExtension(name);
+  if (!supportedKnowledgeFileExtensions.has(extension)) {
+    throw new Error("このファイル形式はまだ対応していません。json / md / txt のいずれかで添付してください。");
+  }
+  if (size > maxSlackKnowledgeFileBytes) {
+    throw new Error("ファイルサイズが大きすぎます。5MB以下の json / md / txt に分割してください。");
+  }
+  const url = file?.url_private_download || file?.url_private;
+  if (!url) throw new Error("SlackファイルURLを取得できませんでした。");
+  const response = await fetch(url, {
+    headers: { "Authorization": `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    throw new Error("ファイル取得に失敗しました。Web貼り付け画面を使ってください。");
+  }
+  return {
+    text: await response.text(),
+    name,
+    size,
+    extension,
+    too_large_warning: size > oneMb
+      ? "ファイルサイズが1MBを超えています。保存候補にはできますが、処理に時間がかかる場合があります。"
+      : ""
+  };
 }
 
 async function fetchSlackFile(file) {
@@ -313,7 +361,28 @@ function inputNoteText(payload) {
 function confirmationBlocks(pending) {
   const payload = pending.payload;
   const candidate = pending.candidates?.[0];
+  const preview = String(payload.body || "").slice(0, 360);
+  const attachmentContextBlock = payload.has_attachment
+    ? {
+      type: "section",
+      text: mrkdwn([
+        "*ナレッジ候補を読み取りました。まだ保存していません。*",
+        "",
+        "*入力方法:*\nSlackファイル添付",
+        `*ファイル名:*\n${payload.file_name || ""}`,
+        `*推定入力タイプ:*\n${inputLabels[payload.input_type] || payload.input_type}`,
+        `*文字数:*\n${Number(payload.char_count || String(payload.body || "").length).toLocaleString("ja-JP")}文字`,
+        `*Slack本文:*\n${payload.supplemental_text ? "補足メモあり。Slack本文は補足メモとして保存します。" : "なし"}`,
+        payload.json_parse_warning ? `*JSON解析:*\n${payload.json_parse_warning}` : "",
+        String(payload.body || "").length > 800
+          ? "本文が長いため、確認カードでは先頭のみ表示しています。全文は承認後にGitHubへ保存されます。"
+          : "",
+        preview ? `*本文プレビュー:*\n${preview}` : ""
+      ].filter(Boolean).join("\n"))
+    }
+    : null;
   return [
+    ...(attachmentContextBlock ? [attachmentContextBlock] : []),
     {
       type: "section",
       text: mrkdwn([
@@ -1115,12 +1184,23 @@ async function createPendingFromEvent(body) {
   let text = event.text || "";
   let supplementalText = "";
   let fileName = "";
+  let fileMeta = null;
   if (Array.isArray(event.files) && event.files.length > 0) {
+    const supportedFiles = supportedKnowledgeFiles(event.files);
+    if (supportedFiles.length === 0) {
+      await postThread(event.channel, event.ts, "このファイル形式はまだ対応していません。json / md / txt のいずれかで添付してください。\nまだ保存していません。");
+      return;
+    }
+    if (supportedFiles.length > 1) {
+      await postThread(event.channel, event.ts, "複数ファイルは未対応です。1ファイルずつ投稿してください。\nまだ保存していません。");
+      return;
+    }
     try {
-      const file = await fetchSlackFile(event.files[0]);
+      const file = await fetchSlackKnowledgeFile(supportedFiles[0]);
       supplementalText = event.text || "";
       text = file.text || text;
       fileName = file.name;
+      fileMeta = file;
     } catch (error) {
       await postThread(event.channel, event.ts, `ファイル取得に失敗しました。まだ保存していません。\n${error.message}\nWeb貼り付け画面: ${env("URL") || ""}/public/knowledge-ingest.html`);
       return;
@@ -1139,9 +1219,17 @@ async function createPendingFromEvent(body) {
       ts: event.ts,
       user: event.user || "",
       message_url: slackMessageUrl,
-      event_id: dedupeKey
+      event_id: dedupeKey,
+      source_type: fileMeta
+        ? (supplementalText ? "slack_text_and_file" : "slack_file")
+        : "slack_text",
+      file_name: fileMeta?.name || "",
+      file_size: fileMeta?.size || 0
     }
   });
+  if (fileMeta?.too_large_warning) {
+    payload.warnings = [...(payload.warnings || []), fileMeta.too_large_warning];
+  }
   const candidates = await findSimilarKnowledge(client, payload);
   const pending = {
     pending_key: pendingKey,

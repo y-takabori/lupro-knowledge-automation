@@ -705,3 +705,65 @@ GitHubには存在せずSheetsにだけ存在する場合、Botは以下の確�
 ```
 
 この場合も即削除せず、削除予定project_key、`ナレッジ一覧` の削除予定件数、`更新履歴` の削除予定件数、GitHub側が対象なし/削除済みであることを確認カードに表示します。`実行する` を押した場合のみ、Sheets上のテスト行を削除します。
+
+### Slackファイル添付での長文ナレッジ保存
+
+Slack本文の文字数制限を避けるため、長文のLUPRO実践ナレッジはSlack本文へ貼り付けず、`.json` / `.md` / `.txt` ファイルとして添付する運用を推奨します。Slack本文は補足メモとして扱えます。
+
+対応形式:
+
+- `.json`
+- `.md`
+- `.txt`
+
+ファイル添付時の扱い:
+
+- 添付ファイル本文を保存対象の本文として読み取ります。
+- Slack本文が同時にある場合は、`supplemental_text` として扱い、GitHubには `supplemental.md` として保存します。
+- 確認カードには全文を出さず、ファイル名、推定入力タイプ、文字数、補足メモ有無、先頭プレビューだけを表示します。
+- 承認前にはGitHub保存・Google Sheets同期は行いません。
+
+サイズ上限:
+
+- 1MB以下: 通常処理
+- 1MB超から5MB以下: 保存候補にはしますが、確認カードに警告を表示します
+- 5MB超: 拒否します。5MB以下の `json` / `md` / `txt` に分割してください
+
+JSON添付の扱い:
+
+- JSONとして解析できた場合は `input_type=json` として扱い、`raw.json` に保存します。
+- JSONとして解析できない場合も保存候補化し、原文を `raw.txt` に保存します。確認カードと `metadata.json` の `warnings` / `json_parse_warning` に注意を残します。
+- `metadata.json` には `parsed_json_available` を保存します。
+
+複数ファイル添付:
+
+- 対応ファイルが1つだけなら、そのファイルを本文として使います。
+- 対応ファイルが複数ある場合は未対応です。1ファイルずつ投稿してください。
+- 将来的には複数ファイルを1ナレッジに束ねる対応を検討します。
+
+保存後のGitHub構成:
+
+```text
+knowledge/{knowledge_type}/{project_key}/index.md
+knowledge/{knowledge_type}/{project_key}/metadata.json
+knowledge/{knowledge_type}/{project_key}/raw.json または raw.md または raw.txt
+knowledge/{knowledge_type}/{project_key}/supplemental.md
+knowledge/{knowledge_type}/{project_key}/updates/{timestamp}.md
+knowledge/{knowledge_type}/{project_key}/updates/{timestamp}.json
+knowledge/{knowledge_type}/{project_key}/updates/{timestamp}.txt
+```
+
+Google Sheetsには、既存のURLや分類情報に加えて以下を反映します。
+
+- `source_type`: `slack_text`, `slack_file`, `slack_text_and_file`, `web_paste`
+- `file_name`
+- `file_size`
+- `char_count`
+- `has_attachment`
+- `has_supplemental_text`
+- `input_type`
+- `raw_url`
+- `metadata_url`
+- `github_index_url`
+
+Slack private file URLやBot Token、本文全文はログや確認カードに出さないでください。GitHubリポジトリはPrivate前提で運用してください。

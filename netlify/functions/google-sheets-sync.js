@@ -22,7 +22,13 @@ const knowledgeHeaders = [
   "sensitive_info",
   "slack_user",
   "slack_channel",
-  "slack_ts"
+  "slack_ts",
+  "source_type",
+  "file_name",
+  "file_size",
+  "char_count",
+  "has_attachment",
+  "has_supplemental_text"
 ];
 
 const eventHeaders = [
@@ -43,7 +49,13 @@ const eventHeaders = [
   "note",
   "slack_channel",
   "slack_ts",
-  "source"
+  "source",
+  "source_type",
+  "file_name",
+  "file_size",
+  "char_count",
+  "has_attachment",
+  "has_supplemental_text"
 ];
 
 const sheetFormatState = new Set();
@@ -273,7 +285,13 @@ function formattingRequests(sheetId, headers, kind) {
     slack_user: 120,
     slack_channel: 130,
     slack_ts: 130,
-    source: 130
+    source: 130,
+    source_type: 150,
+    file_name: 180,
+    file_size: 110,
+    char_count: 110,
+    has_attachment: 120,
+    has_supplemental_text: 150
   };
 
   const requests = [
@@ -459,7 +477,7 @@ function eventType(payload, result) {
 }
 
 function updateUrl(result) {
-  return result.update_url || result.update_json_url || "";
+  return result.update_url || result.update_json_url || result.update_txt_url || "";
 }
 
 function rawUrl(result) {
@@ -490,7 +508,13 @@ function buildKnowledgeRow(payload, result, options = {}) {
     sensitiveInfo(payload),
     payload.slack_user || "",
     payload.slack_channel || "",
-    payload.slack_ts || ""
+    payload.slack_ts || "",
+    payload.source_type || "",
+    payload.file_name || "",
+    payload.file_size ? String(payload.file_size) : "",
+    payload.char_count ? String(payload.char_count) : "",
+    payload.has_attachment ? "yes" : "no",
+    payload.has_supplemental_text || payload.supplemental_text ? "yes" : "no"
   ];
 }
 
@@ -513,7 +537,13 @@ function buildEventRow(payload, result, options = {}) {
     options.note || "",
     payload.slack_channel || "",
     payload.slack_ts || "",
-    payload.source || ""
+    payload.source || "",
+    payload.source_type || "",
+    payload.file_name || "",
+    payload.file_size ? String(payload.file_size) : "",
+    payload.char_count ? String(payload.char_count) : "",
+    payload.has_attachment ? "yes" : "no",
+    payload.has_supplemental_text || payload.supplemental_text ? "yes" : "no"
   ];
 }
 
@@ -612,7 +642,13 @@ function rowToKnowledgeEntry(row) {
     sensitive_info: row[17] || "",
     slack_user: row[18] || "",
     slack_channel: row[19] || "",
-    slack_ts: row[20] || ""
+    slack_ts: row[20] || "",
+    source_type: row[21] || "",
+    file_name: row[22] || "",
+    file_size: row[23] || "",
+    char_count: row[24] || "",
+    has_attachment: row[25] || "",
+    has_supplemental_text: row[26] || ""
   };
 }
 
