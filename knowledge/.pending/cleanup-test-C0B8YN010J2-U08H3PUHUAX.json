@@ -1,0 +1,130 @@
+{
+  "pending_key": "cleanup-test-C0B8YN010J2-U08H3PUHUAX",
+  "status": "cleanup_test_pending",
+  "created_at": "2026-06-09T06:55:56.867Z",
+  "channel": "C0B8YN010J2",
+  "user": "U08H3PUHUAX",
+  "response_url": "https://hooks.slack.com/commands/T08H03FDJJ1/11317793047060/sFZqDt2SPEePWYikd6gP4XiD",
+  "cleanup_preview": {
+    "ok": true,
+    "skipped": false,
+    "knowledge_sheet": "ナレッジ一覧",
+    "events_sheet": "更新履歴",
+    "project_keys": [
+      "google-sheets",
+      "google-sheets-2",
+      "google-sheets-3",
+      "slack",
+      "20260609-0758-12345b5e",
+      "test-knowledge"
+    ],
+    "knowledge_count": 2,
+    "history_count": 2,
+    "knowledge_matches": [
+      {
+        "row": [
+          "google-sheets-3",
+          "Google Sheets連携テスト3",
+          "notes",
+          "未分類",
+          "saved",
+          "# Google Sheets連携テスト3\n\nSlackから保存したナレッジが、GitHubだけでなくGoogleスプレッドシートにも一覧化されるか再確認しています。\n\n目的：\nGOOGLE_PRIVATE_KEY修正後に、ナレッジ一覧と更新履歴に自動で行が追加されることを確認する。\n\n使用ツール：\nChatGPT, ",
+          "ChatGPT, Codex, GitHub, Netlify, Slack, Google Sheets",
+          "2026-06-09T10:05:56+09:00",
+          "2026-06-09T10:05:56+09:00",
+          "0",
+          "created",
+          "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets-3/index.md",
+          "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets-3/raw.md",
+          "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets-3/metadata.json",
+          "",
+          "slack_event",
+          "markdown",
+          "",
+          "",
+          "C0B8YN010J2",
+          "1780967111"
+        ],
+        "row_number": 2,
+        "project_key": "google-sheets-3"
+      },
+      {
+        "row": [
+          "google-sheets",
+          "Google Sheets体裁テスト",
+          "notes",
+          "未分類",
+          "saved",
+          "# Google Sheets体裁テスト\n\nSlackから保存したナレッジが、Googleスプレッドシートに見やすい形式で一覧化されるか確認しています。\n\n目的：\nナレッジ一覧と更新履歴のヘッダー固定、フィルタ、列幅、折り返し、URL列の表示が整うか確認する。\n\n使用ツール：\nChatGPT, Codex, Slack",
+          "ChatGPT, Codex, GitHub, Netlify, Slack, Google Sheets",
+          "2026-06-09T09:57:47+09:00",
+          "2026-06-09T10:30:20+09:00",
+          "1",
+          "updated",
+          "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets/index.md",
+          "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets/raw-20260609-103020.md",
+          "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets/metadata.json",
+          "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets/updates/2026-06-09-103020.md",
+          "slack_event",
+          "markdown",
+          "",
+          "U08H3PUHUAX",
+          "C0B8YN010J2",
+          "1780968579"
+        ],
+        "row_number": 3,
+        "project_key": "google-sheets"
+      }
+    ],
+    "history_matches": [
+      {
+        "row": [
+          "Ev0B987W2681",
+          "",
+          "created",
+          "new",
+          "google-sheets-3",
+          "Google Sheets連携テスト3",
+          "notes",
+          "未分類",
+          "markdown",
+          "U08H3PUHUAX",
+          "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets-3/index.md",
+          "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets-3/raw.md",
+          "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets-3/metadata.json",
+          "",
+          "",
+          "C0B8YN010J2",
+          "1780967111",
+          "slack_event"
+        ],
+        "row_number": 2,
+        "project_key": "google-sheets-3"
+      },
+      {
+        "row": [
+          "Ev0BA0QJJCU8",
+          "2026-06-09T10:30:20+09:00",
+          "updated",
+          "update",
+          "google-sheets",
+          "Google Sheets体裁テスト",
+          "notes",
+          "未分類",
+          "markdown",
+          "U08H3PUHUAX",
+          "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets/index.md",
+          "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets/raw-20260609-103020.md",
+          "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets/metadata.json",
+          "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets/updates/2026-06-09-103020.md",
+          "project_key not found, inserted by update event",
+          "C0B8YN010J2",
+          "1780968579",
+          "slack_event"
+        ],
+        "row_number": 3,
+        "project_key": "google-sheets"
+      }
+    ]
+  }
+}
