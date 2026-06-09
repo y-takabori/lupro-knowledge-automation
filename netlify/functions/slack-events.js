@@ -9,7 +9,14 @@ import {
   saveKnowledgeToGitHub,
   verifySlackSignature
 } from "./knowledge-archive-core.js";
-import { syncKnowledgeDeletionToGoogleSheets, syncKnowledgeToGoogleSheets } from "./google-sheets-sync.js";
+import {
+  cleanupTestKnowledgeInGoogleSheets,
+  findKnowledgeInGoogleSheets,
+  getTestKnowledgeCleanupPreview,
+  syncKnowledgeDeletionToGoogleSheets,
+  syncKnowledgeToGoogleSheets,
+  syncSheetsOnlyKnowledgeDeletion
+} from "./google-sheets-sync.js";
 
 const typeLabels = {
   learnings: "学び・気づき",
@@ -588,8 +595,134 @@ function deletePendingKey(channel, user, knowledgeType, projectKey) {
   return safePendingKey(`delete-${channel}-${user}-${knowledgeType}-${projectKey}`);
 }
 
+function parseDeleteCommandTextV2(text) {
+  const value = String(text || "").trim();
+  if (!value) return { error: "削除対象を指定してください。例: /knowledge-delete notes/slack" };
+  const first = value.split(/\s+/)[0] || "";
+  if (first === "cleanup-test") return { cleanup_test: true };
+  if (first.includes("/")) {
+    const [knowledgeType, projectKey] = first.split("/");
+    return { knowledge_type: knowledgeType, project_key: projectKey };
+  }
+  const parts = value.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return { knowledge_type: parts[0], project_key: parts[1] };
+  }
+  return { project_key: first };
+}
+
+function sheetEntryFromMatch(match, parsed) {
+  const entry = match.entry || {};
+  return {
+    title: entry.title || parsed.project_key,
+    project_key: entry.project_key || parsed.project_key,
+    knowledge_type: parsed.knowledge_type || entry.knowledge_type || "notes",
+    category: entry.category || "",
+    status: entry.status || "",
+    summary: entry.summary || "",
+    source: entry.source || "google_sheets",
+    input_type: entry.input_type || "",
+    raw_url: entry.raw_url || "",
+    metadata_url: entry.metadata_url || "",
+    github_index_url: entry.github_index_url || "",
+    slack_user: entry.slack_user || "",
+    slack_channel: entry.slack_channel || "",
+    slack_ts: entry.slack_ts || "",
+    sheets_only: true,
+    sheets_row_number: match.row_number
+  };
+}
+
+async function findKnowledgeForDeleteV2(client, parsed) {
+  const entries = await readJsonFile(client, "knowledge/index.json", []);
+  if (!Array.isArray(entries)) return { error: "knowledge/index.json を読み取れませんでした。" };
+  const matches = entries.filter((entry) => {
+    if (parsed.knowledge_type && entry.knowledge_type !== parsed.knowledge_type) return false;
+    return entry.project_key === parsed.project_key;
+  });
+  if (matches.length > 1) {
+    return { error: `project_key が複数見つかりました。knowledge_type も指定してください: ${matches.map((item) => `${item.knowledge_type}/${item.project_key}`).join(", ")}` };
+  }
+  if (matches.length === 1) return { entry: matches[0] };
+
+  const deletedTypes = parsed.knowledge_type ? [parsed.knowledge_type] : Object.keys(knowledgeTypeFolders);
+  const deletedMatches = [];
+  for (const knowledgeType of deletedTypes) {
+    const folder = knowledgeTypeFolders[knowledgeType];
+    if (!folder) continue;
+    const deleted = await readJsonFile(client, `knowledge/.deleted/${folder}/${parsed.project_key}/metadata.json`, null);
+    if (deleted?.project_key) deletedMatches.push({ knowledgeType, folder, deleted });
+  }
+  if (deletedMatches.length > 1) {
+    return { error: `削除済みproject_keyが複数見つかりました。knowledge_type も指定してください: ${deletedMatches.map((item) => `${item.knowledgeType}/${parsed.project_key}`).join(", ")}` };
+  }
+  if (deletedMatches.length === 1) {
+    const { knowledgeType, deleted } = deletedMatches[0];
+    return {
+      entry: {
+        title: deleted.title || parsed.project_key,
+        project_key: parsed.project_key,
+        knowledge_type: knowledgeType,
+        path: deleted.original_path || deleted.path || `knowledge/${knowledgeType}/${parsed.project_key}/index.md`,
+        already_deleted: true
+      }
+    };
+  }
+
+  const sheets = await findKnowledgeInGoogleSheets(parsed);
+  if (sheets.ok && Array.isArray(sheets.matches) && sheets.matches.length > 0) {
+    if (sheets.matches.length > 1) {
+      return { error: `Google Sheets上にproject_keyが複数見つかりました。knowledge_type も指定してください: ${sheets.matches.map((item) => `${item.entry.knowledge_type || "unknown"}/${item.entry.project_key}`).join(", ")}` };
+    }
+    return { entry: sheetEntryFromMatch(sheets.matches[0], parsed) };
+  }
+  if (sheets.skipped) {
+    return { error: `指定されたナレッジはGitHub上に見つかりませんでした。Google Sheets検索も未設定のため実行できません: ${sheets.message}` };
+  }
+  return { error: "指定されたナレッジがGitHub / Google Sheetsのどちらにも見つかりませんでした。" };
+}
+
 function deleteConfirmationBlocks(pending) {
   const entry = pending.delete_entry;
+  if (entry.sheets_only) {
+    return [
+      {
+        type: "section",
+        text: mrkdwn([
+          "*GitHub上のナレッジは見つかりませんでしたが、Google Sheets上に該当行が見つかりました。*",
+          "",
+          "*削除対象:*",
+          `project_key: ${entry.project_key}`,
+          `title: ${entry.title || entry.project_key}`,
+          `knowledge_type: ${entry.knowledge_type}`,
+          "削除対象: Google Sheetsのみ",
+          "",
+          "このSheets行を削除しますか？",
+          testCleanupProjectKey(entry.project_key)
+            ? "このproject_keyはテストクリーンアップ対象のため、更新履歴の既存行も完全削除します。"
+            : "通常運用の削除として、更新履歴には deleted イベントを追加します。"
+        ].join("\n"))
+      },
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: slackText("Sheetsから削除する"),
+            style: "danger",
+            action_id: "knowledge_delete_confirm",
+            value: pending.pending_key
+          },
+          {
+            type: "button",
+            text: slackText("キャンセル"),
+            action_id: "knowledge_delete_cancel",
+            value: pending.pending_key
+          }
+        ]
+      }
+    ];
+  }
   return [
     {
       type: "section",
@@ -626,6 +759,61 @@ function deleteConfirmationBlocks(pending) {
   ];
 }
 
+function testCleanupProjectKey(projectKey) {
+  return new Set([
+    "google-sheets",
+    "google-sheets-2",
+    "google-sheets-3",
+    "slack",
+    "20260609-0758-12345b5e",
+    "test-knowledge"
+  ]).has(projectKey);
+}
+
+function cleanupPendingKey(channel, user) {
+  return safePendingKey(`cleanup-test-${channel}-${user}`);
+}
+
+function cleanupConfirmationBlocks(pending) {
+  const preview = pending.cleanup_preview || {};
+  const projectKeys = preview.project_keys || [];
+  return [
+    {
+      type: "section",
+      text: mrkdwn([
+        "*テストナレッジのGoogle Sheets一括クリーンアップ確認です。まだ削除していません。*",
+        "",
+        "*削除予定project_key:*",
+        projectKeys.map((key) => `- ${key}`).join("\n"),
+        "",
+        `ナレッジ一覧から削除予定: ${preview.knowledge_count ?? 0}行`,
+        `更新履歴から削除予定: ${preview.history_count ?? 0}行`,
+        "GitHub: 対象なし / 削除済みの想定",
+        "",
+        "実行する場合だけ、下の「実行する」を押してください。"
+      ].join("\n"))
+    },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: slackText("実行する"),
+          style: "danger",
+          action_id: "knowledge_cleanup_test_confirm",
+          value: pending.pending_key
+        },
+        {
+          type: "button",
+          text: slackText("キャンセル"),
+          action_id: "knowledge_cleanup_test_cancel",
+          value: pending.pending_key
+        }
+      ]
+    }
+  ];
+}
+
 function deleteResultMessage(result, sheets) {
   return [
     "削除しました。",
@@ -641,13 +829,37 @@ async function createDeletePendingFromCommand(params) {
   const responseUrl = params.get("response_url") || "";
   const channel = params.get("channel_id") || "";
   const user = params.get("user_id") || "";
-  const parsed = parseDeleteCommandText(params.get("text") || "");
+  const parsed = parseDeleteCommandTextV2(params.get("text") || "");
   if (parsed.error) {
     await postResponseUrl(responseUrl, parsed.error);
     return;
   }
   const client = getGitHubClient();
-  const found = await findKnowledgeForDelete(client, parsed);
+  if (parsed.cleanup_test) {
+    const preview = await getTestKnowledgeCleanupPreview();
+    if (preview.skipped) {
+      await postResponseUrl(responseUrl, `Google Sheets連携が未設定のため、テストクリーンアップ件数を確認できません: ${preview.message}`);
+      return;
+    }
+    const pending = {
+      pending_key: cleanupPendingKey(channel, user),
+      status: "cleanup_test_pending",
+      created_at: new Date().toISOString(),
+      channel,
+      user,
+      response_url: responseUrl,
+      cleanup_preview: preview
+    };
+    await putJsonFile(client, pendingPath(pending.pending_key), pending, "Create pending test knowledge cleanup");
+    await postResponseUrl(
+      responseUrl,
+      "テストナレッジのGoogle Sheets一括クリーンアップ確認です。",
+      cleanupConfirmationBlocks(pending),
+      { replace_original: true }
+    );
+    return;
+  }
+  const found = await findKnowledgeForDeleteV2(client, parsed);
   if (found.error) {
     await postResponseUrl(responseUrl, found.error);
     return;
@@ -729,6 +941,158 @@ async function handleDeleteAction(payload) {
     );
   } catch (error) {
     await postResponseUrl(payload.response_url || pending.response_url || "", `削除に失敗しました。\n${error.message}`);
+  }
+}
+
+function sheetsOnlyDeleteResultMessage(result, sheets) {
+  return [
+    testCleanupProjectKey(result.project_key)
+      ? "Google Sheetsのテストデータを削除しました。"
+      : "Google Sheetsのナレッジ行を削除しました。",
+    `title: ${result.title}`,
+    `knowledge_type: ${result.knowledge_type}`,
+    `project_key: ${result.project_key}`,
+    `ナレッジ一覧: ${sheets?.knowledge_rows_deleted ?? 0}行削除`,
+    sheets?.delete_history
+      ? `更新履歴: ${sheets?.history_rows_deleted ?? 0}行削除`
+      : `更新履歴: deletedイベント追加${sheets?.deleted_event_added ? "済み" : "なし"}`,
+    "GitHub: 対象なし / 削除済み"
+  ].join("\n");
+}
+
+async function handleDeleteActionV2(payload) {
+  const action = payload.actions?.[0];
+  const pendingKey = action?.value || "";
+  const client = getGitHubClient();
+  const pending = await readJsonFile(client, pendingPath(pendingKey), null);
+  if (!pending || pending.status !== "delete_pending") {
+    await postResponseUrl(payload.response_url || "", "この削除確認は処理済み、または期限切れです。削除したい場合は、もう一度 /knowledge-delete を実行してください。");
+    return;
+  }
+
+  if (action.action_id === "knowledge_delete_cancel") {
+    await putJsonFile(client, pendingPath(pendingKey), {
+      ...pending,
+      status: "cancelled",
+      updated_at: new Date().toISOString()
+    }, `Cancel pending knowledge deletion ${pendingKey}`);
+    await postResponseUrl(
+      payload.response_url || pending.response_url || "",
+      "削除をキャンセルしました。\nGitHub削除・Google Sheets更新は行っていません。",
+      finishedBlocks("削除をキャンセルしました。", "GitHub削除・Google Sheets更新は行っていません。"),
+      { replace_original: true }
+    );
+    return;
+  }
+
+  try {
+    const entry = pending.delete_entry;
+    let result;
+    let sheets;
+    if (entry.sheets_only) {
+      sheets = await syncSheetsOnlyKnowledgeDeletion({
+        ...entry,
+        source: "slack",
+        slack_user: payload.user?.id || pending.user || "",
+        slack_channel: payload.channel?.id || pending.channel || "",
+        note: testCleanupProjectKey(entry.project_key)
+          ? "test knowledge cleanup hard delete"
+          : "sheets only knowledge deletion"
+      }, {
+        deleteHistory: testCleanupProjectKey(entry.project_key)
+      });
+      result = {
+        title: entry.title || entry.project_key,
+        knowledge_type: entry.knowledge_type,
+        project_key: entry.project_key,
+        source: "slack",
+        sheets_only: true
+      };
+    } else {
+      result = await deleteKnowledgeFromGitHub({
+        knowledge_type: entry.knowledge_type,
+        project_key: entry.project_key,
+        source: "slack"
+      });
+      try {
+        sheets = await syncKnowledgeDeletionToGoogleSheets({
+          ...entry,
+          source: "slack",
+          slack_user: payload.user?.id || pending.user || "",
+          slack_channel: payload.channel?.id || pending.channel || "",
+          note: "slack knowledge deletion"
+        }, result);
+      } catch (error) {
+        sheets = { ok: false, skipped: false, message: error.message };
+      }
+    }
+
+    await putJsonFile(client, pendingPath(pendingKey), {
+      ...pending,
+      status: "deleted",
+      updated_at: new Date().toISOString(),
+      result
+    }, `Mark pending knowledge deletion ${pendingKey} deleted`);
+    const message = entry.sheets_only
+      ? sheetsOnlyDeleteResultMessage(result, sheets)
+      : deleteResultMessage(result, sheets);
+    await postResponseUrl(
+      payload.response_url || pending.response_url || "",
+      message,
+      finishedBlocks(entry.sheets_only ? "Google Sheetsのデータを削除しました。" : "削除しました。", message),
+      { replace_original: true }
+    );
+  } catch (error) {
+    await postResponseUrl(payload.response_url || pending.response_url || "", `削除に失敗しました。\n${error.message}`);
+  }
+}
+
+async function handleCleanupTestAction(payload) {
+  const action = payload.actions?.[0];
+  const pendingKey = action?.value || "";
+  const client = getGitHubClient();
+  const pending = await readJsonFile(client, pendingPath(pendingKey), null);
+  if (!pending || pending.status !== "cleanup_test_pending") {
+    await postResponseUrl(payload.response_url || "", "このクリーンアップ確認は処理済み、または期限切れです。もう一度 /knowledge-delete cleanup-test を実行してください。");
+    return;
+  }
+  if (action.action_id === "knowledge_cleanup_test_cancel") {
+    await putJsonFile(client, pendingPath(pendingKey), {
+      ...pending,
+      status: "cancelled",
+      updated_at: new Date().toISOString()
+    }, `Cancel pending test knowledge cleanup ${pendingKey}`);
+    await postResponseUrl(
+      payload.response_url || pending.response_url || "",
+      "テストクリーンアップをキャンセルしました。\nGoogle Sheets更新は行っていません。",
+      finishedBlocks("テストクリーンアップをキャンセルしました。", "Google Sheets更新は行っていません。"),
+      { replace_original: true }
+    );
+    return;
+  }
+
+  try {
+    const sheets = await cleanupTestKnowledgeInGoogleSheets(pending.cleanup_preview?.project_keys);
+    await putJsonFile(client, pendingPath(pendingKey), {
+      ...pending,
+      status: "cleaned",
+      updated_at: new Date().toISOString(),
+      result: sheets
+    }, `Mark pending test knowledge cleanup ${pendingKey} cleaned`);
+    const message = [
+      "Google Sheetsのテストデータを削除しました。",
+      `ナレッジ一覧: ${sheets.knowledge_rows_deleted ?? 0}行削除`,
+      `更新履歴: ${sheets.history_rows_deleted ?? 0}行削除`,
+      "GitHub: 対象なし / 削除済み"
+    ].join("\n");
+    await postResponseUrl(
+      payload.response_url || pending.response_url || "",
+      message,
+      finishedBlocks("Google Sheetsのテストデータを削除しました。", message),
+      { replace_original: true }
+    );
+  } catch (error) {
+    await postResponseUrl(payload.response_url || pending.response_url || "", `テストクリーンアップに失敗しました。\n${error.message}`);
   }
 }
 
@@ -1095,8 +1459,13 @@ export async function handleSlackInteractivity(payload, context) {
   }
 
   const actionId = payload.actions?.[0]?.action_id || "";
+  if (actionId === "knowledge_cleanup_test_confirm" || actionId === "knowledge_cleanup_test_cancel") {
+    const work = handleCleanupTestAction(payload);
+    if (context?.waitUntil) context.waitUntil(work);
+    return jsonResponse(200, {});
+  }
   if (actionId === "knowledge_delete_confirm" || actionId === "knowledge_delete_cancel") {
-    const work = handleDeleteAction(payload);
+    const work = handleDeleteActionV2(payload);
     if (context?.waitUntil) context.waitUntil(work);
     return jsonResponse(200, {});
   }

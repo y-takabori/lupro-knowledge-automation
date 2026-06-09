@@ -677,3 +677,31 @@ curl -X POST \
 - `learnings/test-knowledge`
 
 Sheets環境変数が未設定、またはSheets更新に失敗した場合でも、GitHub削除は成功扱いにし、レスポンス内の各targetにSheets結果を分けて返します。
+
+### GitHub削除後にSheetsだけ残った場合
+
+`/knowledge-delete` は、GitHubの `knowledge/index.json` と `.deleted` に対象が見つからない場合でも、Google Sheets連携が有効なら `ナレッジ一覧` シートの `project_key` を検索します。
+
+GitHubには存在せずSheetsにだけ存在する場合、Botは以下の確認カードを返します。
+
+- GitHub上のナレッジは見つからなかったこと
+- Sheets上の `project_key`, `title`, `knowledge_type`
+- 削除対象が `Google Sheetsのみ` であること
+- `Sheetsから削除する` / `キャンセル` ボタン
+
+`Sheetsから削除する` を押した場合、`ナレッジ一覧` の該当行を削除します。通常運用の削除では `更新履歴` に `deleted` イベントを追加します。以下のテスト用 `project_key` については、テストクリーンアップとして `更新履歴` の既存行も完全削除します。
+
+- `google-sheets`
+- `google-sheets-2`
+- `google-sheets-3`
+- `slack`
+- `20260609-0758-12345b5e`
+- `test-knowledge`
+
+一括削除したい場合は、Slackから以下を実行します。
+
+```text
+/knowledge-delete cleanup-test
+```
+
+この場合も即削除せず、削除予定project_key、`ナレッジ一覧` の削除予定件数、`更新履歴` の削除予定件数、GitHub側が対象なし/削除済みであることを確認カードに表示します。`実行する` を押した場合のみ、Sheets上のテスト行を削除します。

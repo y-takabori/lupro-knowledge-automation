@@ -3,7 +3,7 @@ import {
   env,
   jsonResponse
 } from "./knowledge-archive-core.js";
-import { syncKnowledgeDeletionToGoogleSheets } from "./google-sheets-sync.js";
+import { cleanupTestKnowledgeInGoogleSheets } from "./google-sheets-sync.js";
 
 const cleanupTargets = [
   { knowledge_type: "notes", project_key: "google-sheets" },
@@ -20,28 +20,16 @@ function authorized(request) {
   return Boolean(expected && header === `Bearer ${expected}`);
 }
 
-async function cleanupTarget(target) {
+async function cleanupGitHubTarget(target) {
   const result = await deleteKnowledgeFromGitHub({
     ...target,
     source: "cleanup"
   });
-  let sheets;
-  try {
-    sheets = await syncKnowledgeDeletionToGoogleSheets({
-      ...target,
-      title: result.title,
-      source: "cleanup",
-      note: "test knowledge cleanup"
-    }, result);
-  } catch (error) {
-    sheets = { ok: false, skipped: false, message: error.message };
-  }
   return {
     title: result.title,
     knowledge_type: result.knowledge_type,
     project_key: result.project_key,
-    github_deleted: true,
-    sheets
+    github_deleted: true
   };
 }
 
@@ -57,7 +45,7 @@ export default async (request) => {
   const results = [];
   for (const target of cleanupTargets) {
     try {
-      results.push(await cleanupTarget(target));
+      results.push(await cleanupGitHubTarget(target));
     } catch (error) {
       results.push({
         knowledge_type: target.knowledge_type,
@@ -67,5 +55,11 @@ export default async (request) => {
       });
     }
   }
-  return jsonResponse(200, { ok: true, results });
+  let sheets;
+  try {
+    sheets = await cleanupTestKnowledgeInGoogleSheets(cleanupTargets.map((target) => target.project_key));
+  } catch (error) {
+    sheets = { ok: false, skipped: false, message: error.message };
+  }
+  return jsonResponse(200, { ok: true, results, sheets });
 };
