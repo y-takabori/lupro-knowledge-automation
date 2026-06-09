@@ -1,7 +1,7 @@
 {
   "pending_key": "C0B8YN010J2-1780968579.363689",
   "dedupe_key": "Ev0BA0QJJCU8",
-  "status": "pending",
+  "status": "saved",
   "created_at": "2026-06-09T01:29:41.895Z",
   "channel": "C0B8YN010J2",
   "thread_ts": "1780968579.363689",
@@ -127,5 +127,34 @@
       "similar_reason": "カテゴリが近い / 本文の語句が近い"
     }
   ],
-  "confirmation_message_ts": "1780968582.686159"
+  "confirmation_message_ts": "1780968582.686159",
+  "updated_at": "2026-06-09T01:30:28.676Z",
+  "result": {
+    "message": "Saved knowledge to GitHub.",
+    "title": "Google Sheets体裁テスト",
+    "knowledge_type": "notes",
+    "project_key": "google-sheets",
+    "project_key_source": "markdown_heading",
+    "save_mode": "update",
+    "index_path": "knowledge/notes/google-sheets/index.md",
+    "raw_json_path": "knowledge/notes/google-sheets/raw.json",
+    "raw_md_path": "knowledge/notes/google-sheets/raw-20260609-103020.md",
+    "raw_txt_path": "knowledge/notes/google-sheets/raw-20260609-103020.txt",
+    "raw_path": "knowledge/notes/google-sheets/raw-20260609-103020.md",
+    "metadata_path": "knowledge/notes/google-sheets/metadata.json",
+    "update_path": "knowledge/notes/google-sheets/updates/2026-06-09-103020.md",
+    "update_json_path": "",
+    "created": "2026-06-09T09:57:47+09:00",
+    "updated": "2026-06-09T10:30:20+09:00",
+    "index_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets/index.md",
+    "raw_json_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets/raw.json",
+    "raw_md_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets/raw-20260609-103020.md",
+    "raw_txt_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets/raw-20260609-103020.txt",
+    "raw_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets/raw-20260609-103020.md",
+    "metadata_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets/metadata.json",
+    "update_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google-sheets/updates/2026-06-09-103020.md",
+    "update_json_url": "",
+    "is_update": true,
+    "json_parse_warning": ""
+  }
 }
