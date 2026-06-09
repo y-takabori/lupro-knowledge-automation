@@ -226,7 +226,7 @@ export function detectInputType(text, fileName = "") {
   const trimmed = String(text || "").trim();
   if (/^https?:\/\/\S+$/i.test(trimmed)) return "url";
   const json = parseFlexibleJson(trimmed);
-  if (trimmed.includes("{") && trimmed.includes("}") && (json.valid || /^```json/i.test(trimmed))) return "json";
+  if (trimmed.includes("{") && trimmed.includes("}")) return "json";
   if (/^#{1,6}\s+/m.test(trimmed) || /```/.test(trimmed) || /\n[-*]\s+/.test(trimmed)) return "markdown";
   return "plain_text";
 }
@@ -273,8 +273,9 @@ export function detectSensitiveWarnings(text) {
   return warnings;
 }
 
-export function buildAutoKnowledgePayload({ text, fileName = "", source = "slack_event", slack = {} }) {
+export function buildAutoKnowledgePayload({ text, fileName = "", supplementalText = "", source = "slack_event", slack = {} }) {
   const body = String(text || "").trim();
+  const supplemental = String(supplementalText || "").trim();
   const inputType = detectInputType(body, fileName);
   const jsonResult = inputType === "json" ? parseFlexibleJson(body) : null;
   const parsed = jsonResult?.valid && isPlainObject(jsonResult.parsed) ? jsonResult.parsed : {};
@@ -325,6 +326,7 @@ export function buildAutoKnowledgePayload({ text, fileName = "", source = "slack
     summary,
     input_type: inputType,
     body,
+    supplemental_text: supplemental,
     save_mode: "upsert",
     source,
     slack_channel: slack.channel || "",
@@ -333,6 +335,9 @@ export function buildAutoKnowledgePayload({ text, fileName = "", source = "slack
     slack_event_id: slack.event_id || "",
     json_parse_warning: inputType === "json" && jsonResult && !jsonResult.valid
       ? "JSONとしては壊れていますが、原文保存しました。"
+      : "",
+    json_parse_warning: inputType === "json" && jsonResult && !jsonResult.valid
+      ? "JSONとしては解析できませんでしたが、テキストとして保存できます。"
       : "",
     warnings,
     extracted: {
@@ -343,7 +348,10 @@ export function buildAutoKnowledgePayload({ text, fileName = "", source = "slack
       wordpress_article_angles: parsed.wordpress_article_angles || "",
       note_article_angles: parsed.note_article_angles || "",
       x_threads_post_ideas: parsed.x_threads_post_ideas || ""
-    }
+    },
+    created_at: parsed.created_at || "",
+    updated_at: parsed.updated_at || "",
+    theme: parsed.media_theme || parsed.theme || ""
   };
 }
 
@@ -378,10 +386,14 @@ export function normalizeKnowledgePayload(input) {
     summary: String(input.summary || "").trim(),
     input_type: String(input.input_type || "plain_text").trim(),
     body: String(input.body ?? input.body_short ?? "").trim(),
+    supplemental_text: String(input.supplemental_text || "").trim(),
     save_mode: String(input.save_mode || "upsert").trim(),
     source: String(input.source || "web").trim(),
     file_reference: String(input.file_reference || "").trim(),
     project_key_source: String(input.project_key_source || "").trim(),
+    created_at: String(input.created_at || "").trim(),
+    updated_at: String(input.updated_at || "").trim(),
+    theme: String(input.theme || "").trim(),
     slack_channel: String(input.slack_channel || "").trim(),
     slack_ts: String(input.slack_ts || "").trim(),
     slack_message_url: String(input.slack_message_url || "").trim(),
@@ -447,6 +459,9 @@ function buildMarkdown(payload, options) {
     ),
     markdownSection("今後の改善", parsedJson?.future_improvement_ideas)
   ];
+  if (payload.supplemental_text) {
+    bodySections.splice(1, 0, markdownSection("Slack補足コメント", payload.supplemental_text));
+  }
 
   const extraJsonSections = parsedJson
     ? jsonMarkdownFields
@@ -562,6 +577,10 @@ function requireGitHubConfig() {
 }
 
 function buildMetadata(payload, created, updated, paths, existingMetadata = null) {
+  const warnings = [
+    ...(Array.isArray(payload.warnings) ? payload.warnings : []),
+    payload.json_parse_warning || ""
+  ].filter(Boolean);
   return {
     title: payload.title,
     project_key: payload.project_key,
@@ -571,6 +590,7 @@ function buildMetadata(payload, created, updated, paths, existingMetadata = null
     status: payload.status,
     tools: parseTools(payload.tools),
     summary: payload.summary,
+    theme: payload.extracted?.media_theme || payload.theme || "",
     source: payload.source,
     input_type: payload.input_type,
     save_mode: payload.save_mode,
@@ -581,9 +601,12 @@ function buildMetadata(payload, created, updated, paths, existingMetadata = null
     raw_path: paths.rawPath,
     created: existingMetadata?.created || created,
     updated,
+    created_at: payload.created_at || existingMetadata?.created_at || created,
+    updated_at: payload.updated_at || updated,
     slack_channel: payload.slack_channel || existingMetadata?.slack_channel || "",
     slack_message_url: payload.slack_message_url || existingMetadata?.slack_message_url || "",
-    warnings: payload.warnings || existingMetadata?.warnings || [],
+    supplemental_text: payload.supplemental_text || existingMetadata?.supplemental_text || "",
+    warnings: warnings.length ? warnings : existingMetadata?.warnings || [],
     extracted: payload.extracted || existingMetadata?.extracted || {}
   };
 }
@@ -597,6 +620,7 @@ function indexEntry(metadata) {
     status: metadata.status,
     tools: metadata.tools,
     summary: metadata.summary,
+    theme: metadata.theme,
     path: metadata.path,
     raw_json_path: metadata.raw_json_path,
     raw_md_path: metadata.raw_md_path,
@@ -681,6 +705,7 @@ export async function saveKnowledgeToGitHub(input) {
   const created = existingMetadata?.created || updated;
   const isUpdate = exists && (payload.save_mode === "update" || payload.save_mode === "upsert");
   const updatePath = `${basePath}/updates/${updateStamp}.md`;
+  const updateJsonPath = `${basePath}/updates/${updateStamp}.json`;
   const updateLinks = isUpdate ? [{ label: updateStamp, path: `updates/${updateStamp}.md` }] : [];
   const existingUpdateLinks = existingIndex?.content
     ? Array.from(existingIndex.content.matchAll(/- \[([^\]]+)\]\((updates\/[^)]+)\)/g))
@@ -702,6 +727,9 @@ export async function saveKnowledgeToGitHub(input) {
       jsonResult?.error
     );
     await client.putFile(updatePath, updateMarkdown, `Add knowledge update for ${payload.project_key}`);
+    if (payload.input_type === "json" && jsonResult?.valid) {
+      await client.putFile(updateJsonPath, `${jsonResult.formatted}\n`, `Add knowledge JSON update for ${payload.project_key}`);
+    }
   }
 
   if (payload.input_type === "json") {
@@ -756,6 +784,8 @@ export async function saveKnowledgeToGitHub(input) {
     raw_txt_path: metadata.raw_txt_path,
     raw_path: metadata.raw_path,
     metadata_path: paths.metadataPath,
+    update_path: isUpdate ? updatePath : "",
+    update_json_path: isUpdate && payload.input_type === "json" && jsonResult?.valid ? updateJsonPath : "",
     created: metadata.created,
     updated: metadata.updated,
     index_url: indexFile.html_url || `${htmlBase}/${paths.indexPath}`,
@@ -763,6 +793,10 @@ export async function saveKnowledgeToGitHub(input) {
     raw_md_url: `${htmlBase}/${metadata.raw_md_path}`,
     raw_txt_url: `${htmlBase}/${metadata.raw_txt_path}`,
     raw_url: `${htmlBase}/${metadata.raw_path}`,
+    metadata_url: `${htmlBase}/${paths.metadataPath}`,
+    update_url: isUpdate ? `${htmlBase}/${updatePath}` : "",
+    update_json_url: isUpdate && payload.input_type === "json" && jsonResult?.valid ? `${htmlBase}/${updateJsonPath}` : "",
+    is_update: isUpdate,
     json_parse_warning: payload.json_parse_warning || ""
   };
 }

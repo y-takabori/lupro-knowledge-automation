@@ -498,6 +498,40 @@ Bot自身の投稿、保存完了通知、確認メッセージへのスレッ�
 - plain_textは `raw.txt`、JSONは `raw.json`、Markdownは `raw.md` のリンクが返る
 - 壊れたJSONは `raw.txt` 保存になりwarningが残る
 
+### 長文JSONとファイル添付
+
+ChatGPTが生成した長文JSONは、Slack本文へ直接貼り付けても、`.json` ファイルとして添付しても保存候補になります。Slack本文がJSONとしてパース可能な場合は `input_type=json` として扱い、承認後に `raw.json` と人間向けの `index.md`、一覧用の `metadata.json` を作成します。
+
+JSONとして解析できない場合は保存候補カードに「JSONとしては解析できませんでしたが、テキストとして保存できます。」と表示し、承認後は `raw.txt` として保存します。この警告は `metadata.json` の `warnings` にも残します。
+
+`.json` / `.txt` / `.md` ファイルが添付された場合は、BotがSlack file URLから本文を取得して保存候補にします。Slack投稿本文に補足コメントがある場合は、ファイル本文とは別に `supplemental_text` として `metadata.json` に残し、`index.md` にも「Slack補足コメント」として出します。
+
+Slack本文が長い場合、確認カードに以下を表示します。
+
+```text
+長文の場合は .json / .txt / .md ファイル添付での保存を推奨します。
+```
+
+JSON新規保存時の構成:
+
+```text
+knowledge/{knowledge_type}/{project_key}/index.md
+knowledge/{knowledge_type}/{project_key}/raw.json
+knowledge/{knowledge_type}/{project_key}/metadata.json
+```
+
+JSONを既存ナレッジへ追記する場合は、通常の更新Markdownに加えてJSON差分も残します。
+
+```text
+knowledge/{knowledge_type}/{project_key}/updates/{timestamp}.md
+knowledge/{knowledge_type}/{project_key}/updates/{timestamp}.json
+```
+
+保存完了メッセージは、新規保存と既存追記で表示を分けます。
+
+- 新規保存: `新規保存しました`、タイトル、保存先、`index.md URL`、raw URL、`metadata.json URL`
+- 既存追記: `既存ナレッジに追記しました`、更新先タイトル、更新先保存キー、今回の追記タイトル、追記ファイルURL、`index.md URL`、raw URL
+
 ## Slack URL設定の整理
 
 現在の推奨設定は以下です。

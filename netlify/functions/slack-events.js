@@ -284,6 +284,18 @@ function recommendedText(candidates) {
   return `${first.title || first.project_key}（${first.knowledge_type}/${first.project_key}）`;
 }
 
+function inputNoteText(payload) {
+  const notes = [];
+  if (payload.json_parse_warning) notes.push(payload.json_parse_warning);
+  if (String(payload.body || "").length > 2500) {
+    notes.push("長文の場合は .json / .txt / .md ファイル添付での保存を推奨します。");
+  }
+  if (payload.supplemental_text) {
+    notes.push("Slack本文の補足コメントも保存します。");
+  }
+  return notes.length ? notes.join("\n") : "なし";
+}
+
 function confirmationBlocks(pending) {
   const payload = pending.payload;
   const candidate = pending.candidates?.[0];
@@ -299,6 +311,7 @@ function confirmationBlocks(pending) {
         `*推定保存キー:*\n${payload.project_key}`,
         `*保存キー生成元:*\n${payload.project_key_source || "不明"}`,
         `*推定入力タイプ:*\n${inputLabels[payload.input_type] || payload.input_type}`,
+        `*入力メモ:*\n${inputNoteText(payload)}`,
         `*推定使用ツール:*\n${parseTools(payload.tools).join(", ") || "未取得"}`,
         `*公開時に注意が必要そうな情報:*\n${warningsText(payload.warnings)}`,
         `*類似ナレッジ候補:*\n${candidateText(pending.candidates || [])}`,
@@ -388,6 +401,40 @@ function resultMessage(result, sheets) {
   ].join("\n");
 }
 
+function improvedResultMessage(result, sheets, pendingTitle = "") {
+  const sheetsText = sheets?.ok
+    ? "成功"
+    : sheets?.skipped
+      ? "未設定"
+      : `失敗${sheets?.message ? `: ${sheets.message}` : ""}`;
+  const rawUrl = result.raw_url || result.raw_json_url || result.raw_md_url || result.raw_txt_url;
+  const metadataUrl = result.metadata_url || "";
+  if (result.is_update || result.save_mode === "update") {
+    return [
+      "既存ナレッジに追記しました",
+      `更新先タイトル: ${result.title}`,
+      `更新先保存キー: ${result.project_key}`,
+      `今回の追記タイトル: ${pendingTitle || result.title}`,
+      `追記ファイルURL: ${result.update_url || result.update_json_url || ""}`,
+      `index.md URL: ${result.index_url}`,
+      `raw: ${rawUrl}`,
+      `metadata.json URL: ${metadataUrl}`,
+      `Google Sheets: ${sheetsText}`,
+      `Web貼り付け画面: ${env("URL") || ""}/public/knowledge-ingest.html`
+    ].join("\n");
+  }
+  return [
+    "新規保存しました",
+    `タイトル: ${result.title}`,
+    `保存先: ${result.knowledge_type}/${result.project_key}`,
+    `index.md URL: ${result.index_url}`,
+    `raw: ${rawUrl}`,
+    `metadata.json URL: ${metadataUrl}`,
+    `Google Sheets: ${sheetsText}`,
+    `Web貼り付け画面: ${env("URL") || ""}/public/knowledge-ingest.html`
+  ].join("\n");
+}
+
 async function saveApprovedPending(pending, overrides = {}) {
   const payload = {
     ...pending.payload,
@@ -447,10 +494,12 @@ async function createPendingFromEvent(body) {
   if (await client.getFile(pendingPath(pendingKey))) return;
 
   let text = event.text || "";
+  let supplementalText = "";
   let fileName = "";
   if (Array.isArray(event.files) && event.files.length > 0) {
     try {
       const file = await fetchSlackFile(event.files[0]);
+      supplementalText = event.text || "";
       text = file.text || text;
       fileName = file.name;
     } catch (error) {
@@ -464,6 +513,7 @@ async function createPendingFromEvent(body) {
   const payload = buildAutoKnowledgePayload({
     text,
     fileName,
+    supplementalText,
     source: "slack_event",
     slack: {
       channel: event.channel,
@@ -666,7 +716,7 @@ async function handleAction(payload) {
       "保存済みです。",
       `GitHub本保存を完了しました。\n保存先: ${saved.result.knowledge_type}/${saved.result.project_key}`
     );
-    await postThread(pending.channel, pending.thread_ts, resultMessage(saved.result, saved.sheets));
+    await postThread(pending.channel, pending.thread_ts, improvedResultMessage(saved.result, saved.sheets, pending.payload.title));
   } catch (error) {
     await postThread(pending.channel, pending.thread_ts, `保存に失敗しました。\n${error.message}`);
   }
@@ -773,7 +823,7 @@ async function handleViewSubmission(payload) {
       "保存済みです。",
       `GitHub本保存を完了しました。\n保存先: ${saved.result.knowledge_type}/${saved.result.project_key}`
     );
-    await postThread(pending.channel, pending.thread_ts, resultMessage(saved.result, saved.sheets));
+    await postThread(pending.channel, pending.thread_ts, improvedResultMessage(saved.result, saved.sheets, pending.payload.title));
   } catch (error) {
     await postThread(pending.channel, pending.thread_ts, `保存に失敗しました。\n${error.message}`);
   }
