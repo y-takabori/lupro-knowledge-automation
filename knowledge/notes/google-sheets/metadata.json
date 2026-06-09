@@ -1,0 +1,43 @@
+{
+  "title": "Google Sheets連携テスト",
+  "project_key": "google-sheets",
+  "project_key_source": "markdown_heading",
+  "knowledge_type": "notes",
+  "category": "未分類",
+  "status": "saved",
+  "tools": [
+    "ChatGPT",
+    "Codex",
+    "GitHub",
+    "Netlify",
+    "Slack",
+    "Google Sheets"
+  ],
+  "summary": "# Google Sheets連携テスト\n\nSlackから保存したナレッジが、GitHubだけでなくGoogleスプレッドシートにも一覧化されるか確認しています。\n\n目的：\nナレッジ一覧と更新履歴に自動で行が追加されることを確認する。\n\n使用ツール：\nChatGPT, Codex, Slack, GitHub, Net",
+  "theme": "",
+  "source": "slack_event",
+  "input_type": "markdown",
+  "save_mode": "new",
+  "path": "knowledge/notes/google-sheets/index.md",
+  "raw_json_path": "knowledge/notes/google-sheets/raw.json",
+  "raw_md_path": "knowledge/notes/google-sheets/raw.md",
+  "raw_txt_path": "knowledge/notes/google-sheets/raw.txt",
+  "raw_path": "knowledge/notes/google-sheets/raw.md",
+  "created": "2026-06-09T09:57:47+09:00",
+  "updated": "2026-06-09T09:57:47+09:00",
+  "created_at": "2026-06-09T09:57:47+09:00",
+  "updated_at": "2026-06-09T09:57:47+09:00",
+  "slack_channel": "C0B8YN010J2",
+  "slack_message_url": "",
+  "supplemental_text": "",
+  "warnings": [],
+  "extracted": {
+    "private_or_sensitive_info_to_hide": [],
+    "media_theme": "",
+    "article_main_message": "",
+    "content_strategy": "",
+    "wordpress_article_angles": "",
+    "note_article_angles": "",
+    "x_threads_post_ideas": ""
+  }
+}
