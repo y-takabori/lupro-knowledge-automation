@@ -382,7 +382,7 @@ function finishedBlocks(title, detail) {
 
 function resultMessage(result, sheets) {
   const sheetsText = sheets?.ok
-    ? "成功"
+    ? `成功\n更新シート: ${sheets.knowledge_sheet || "ナレッジ一覧"} / ${sheets.events_sheet || "更新履歴"}`
     : sheets?.skipped
       ? "未設定"
       : `失敗${sheets?.message ? `: ${sheets.message}` : ""}`;
@@ -430,6 +430,47 @@ function improvedResultMessage(result, sheets, pendingTitle = "") {
     `knowledge_type: ${result.knowledge_type}`,
     `project_key: ${result.project_key}`,
     `GitHub保存: 成功`,
+    `GitHub index.md URL: ${result.index_url}`,
+    `raw: ${rawUrl}`,
+    `metadata.json URL: ${metadataUrl}`,
+    `Google Sheets: ${sheetsText}`,
+    `Web貼り付け画面: ${env("URL") || ""}/public/knowledge-ingest.html`
+  ].join("\n");
+}
+
+function sheetsStatusText(sheets) {
+  if (sheets?.ok) {
+    return `成功\n更新シート: ${sheets.knowledge_sheet || "ナレッジ一覧"} / ${sheets.events_sheet || "更新履歴"}`;
+  }
+  if (sheets?.skipped) return "未設定";
+  return `失敗${sheets?.message ? `: ${sheets.message}` : ""}`;
+}
+
+function improvedResultMessageV2(result, sheets, pendingTitle = "") {
+  const sheetsText = sheetsStatusText(sheets);
+  const rawUrl = result.raw_url || result.raw_json_url || result.raw_md_url || result.raw_txt_url;
+  const metadataUrl = result.metadata_url || "";
+  if (result.is_update || result.save_mode === "update") {
+    return [
+      "既存ナレッジに追記しました",
+      `更新先タイトル: ${result.title}`,
+      `project_key: ${result.project_key}`,
+      "save_mode: update",
+      `今回の追記タイトル: ${pendingTitle || result.title}`,
+      "GitHub保存: 成功",
+      `GitHub index.md URL: ${result.index_url}`,
+      `追記ファイルURL: ${result.update_url || result.update_json_url || ""}`,
+      `raw: ${rawUrl}`,
+      `Google Sheets: ${sheetsText}`,
+      `Web貼り付け画面: ${env("URL") || ""}/public/knowledge-ingest.html`
+    ].join("\n");
+  }
+  return [
+    "新規保存しました",
+    `title: ${result.title}`,
+    `knowledge_type: ${result.knowledge_type}`,
+    `project_key: ${result.project_key}`,
+    "GitHub保存: 成功",
     `GitHub index.md URL: ${result.index_url}`,
     `raw: ${rawUrl}`,
     `metadata.json URL: ${metadataUrl}`,
@@ -720,7 +761,7 @@ async function handleAction(payload) {
       "保存済みです。",
       `GitHub本保存を完了しました。\n保存先: ${saved.result.knowledge_type}/${saved.result.project_key}`
     );
-    await postThread(pending.channel, pending.thread_ts, improvedResultMessage(saved.result, saved.sheets, pending.payload.title));
+    await postThread(pending.channel, pending.thread_ts, improvedResultMessageV2(saved.result, saved.sheets, pending.payload.title));
   } catch (error) {
     await postThread(pending.channel, pending.thread_ts, `保存に失敗しました。\n${error.message}`);
   }
@@ -827,7 +868,7 @@ async function handleViewSubmission(payload) {
       "保存済みです。",
       `GitHub本保存を完了しました。\n保存先: ${saved.result.knowledge_type}/${saved.result.project_key}`
     );
-    await postThread(pending.channel, pending.thread_ts, improvedResultMessage(saved.result, saved.sheets, pending.payload.title));
+    await postThread(pending.channel, pending.thread_ts, improvedResultMessageV2(saved.result, saved.sheets, pending.payload.title));
   } catch (error) {
     await postThread(pending.channel, pending.thread_ts, `保存に失敗しました。\n${error.message}`);
   }

@@ -9,41 +9,44 @@ const knowledgeHeaders = [
   "status",
   "summary",
   "tools",
-  "github_index_url",
-  "raw_url",
-  "metadata_url",
   "created_at",
   "updated_at",
   "update_count",
   "last_event_type",
+  "github_index_url",
+  "raw_url",
+  "metadata_url",
   "last_update_url",
   "source",
   "input_type",
   "sensitive_info",
+  "slack_user",
   "slack_channel",
   "slack_ts"
 ];
 
 const eventHeaders = [
   "event_id",
-  "project_key",
-  "title",
+  "event_time",
   "event_type",
   "save_mode",
+  "project_key",
+  "title",
   "knowledge_type",
   "category",
   "input_type",
+  "slack_user",
   "github_index_url",
   "raw_url",
   "metadata_url",
   "update_url",
-  "created_at",
+  "note",
   "slack_channel",
   "slack_ts",
-  "slack_user",
-  "source",
-  "note"
+  "source"
 ];
+
+const sheetFormatState = new Set();
 
 function base64Url(value) {
   return Buffer.from(value)
@@ -57,8 +60,8 @@ function getSheetsConfig() {
   const email = env("GOOGLE_SERVICE_ACCOUNT_EMAIL");
   const privateKey = (env("GOOGLE_PRIVATE_KEY") || env("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"))?.replace(/\\n/g, "\n");
   const spreadsheetId = env("GOOGLE_SHEETS_SPREADSHEET_ID");
-  const knowledgeSheetName = env("GOOGLE_SHEETS_KNOWLEDGE_SHEET_NAME") || env("GOOGLE_SHEETS_WORKSHEET_NAME") || "ナレッジ一覧";
-  const eventsSheetName = env("GOOGLE_SHEETS_EVENTS_SHEET_NAME") || "更新履歴";
+  const knowledgeSheetName = env("GOOGLE_SHEETS_KNOWLEDGE_SHEET_NAME") || env("GOOGLE_SHEETS_WORKSHEET_NAME") || "\u30ca\u30ec\u30c3\u30b8\u4e00\u89a7";
+  const eventsSheetName = env("GOOGLE_SHEETS_EVENTS_SHEET_NAME") || "\u66f4\u65b0\u5c65\u6b74";
   if (!email || !privateKey || !spreadsheetId) {
     return {
       enabled: false,
@@ -134,24 +137,31 @@ async function valuesRequest(config, token, path, options = {}) {
 
 async function ensureSheetExists(config, token, sheetName) {
   const metadata = await googleRequest(config, token, sheetsApiBase(config), { method: "GET" });
-  const exists = metadata.sheets?.some((sheet) => sheet.properties?.title === sheetName);
-  if (exists) return;
+  const existing = metadata.sheets?.find((sheet) => sheet.properties?.title === sheetName);
+  if (existing) return existing.properties;
   await googleRequest(config, token, `${sheetsApiBase(config)}:batchUpdate`, {
     method: "POST",
     body: JSON.stringify({
       requests: [{ addSheet: { properties: { title: sheetName } } }]
     })
   });
+  const nextMetadata = await googleRequest(config, token, sheetsApiBase(config), { method: "GET" });
+  return nextMetadata.sheets?.find((sheet) => sheet.properties?.title === sheetName)?.properties;
 }
 
 async function ensureHeaders(config, token, sheetName, headers) {
-  await ensureSheetExists(config, token, sheetName);
+  const sheetProperties = await ensureSheetExists(config, token, sheetName);
   const endCol = colName(headers.length);
-  const readPath = rangePath(sheetName, `A1:${endCol}1`);
+  const readPath = rangePath(sheetName, "A1:ZZ1");
+  const writePath = rangePath(sheetName, `A1:${endCol}1`);
   const data = await valuesRequest(config, token, readPath, { method: "GET" }).catch(() => ({}));
   const existing = data.values?.[0] || [];
-  if (existing.join("\t") === headers.join("\t")) return;
-  await valuesRequest(config, token, `${readPath}?valueInputOption=RAW`, {
+  if (existing.join("\t") === headers.join("\t")) return sheetProperties;
+  if (existing.length > 0) {
+    await migrateRowsToHeaders(config, token, sheetName, existing, headers);
+    return sheetProperties;
+  }
+  await valuesRequest(config, token, `${writePath}?valueInputOption=RAW`, {
     method: "PUT",
     body: JSON.stringify({
       range: `'${sheetName}'!A1:${endCol}1`,
@@ -159,6 +169,260 @@ async function ensureHeaders(config, token, sheetName, headers) {
       values: [headers]
     })
   });
+  return sheetProperties;
+}
+
+async function migrateRowsToHeaders(config, token, sheetName, existingHeaders, targetHeaders) {
+  const existingEndCol = colName(Math.max(existingHeaders.length, targetHeaders.length));
+  const allDataPath = rangePath(sheetName, `A1:${existingEndCol}`);
+  const data = await valuesRequest(config, token, allDataPath, { method: "GET" }).catch(() => ({ values: [] }));
+  const rows = data.values || [];
+  const sourceHeaders = rows[0] || existingHeaders;
+  const sourceIndex = new Map(sourceHeaders.map((header, index) => [header, index]));
+  const unknownHeaders = sourceHeaders.filter((header) => header && !targetHeaders.includes(header));
+  const nextHeaders = [...targetHeaders, ...unknownHeaders];
+  const nextRows = rows.slice(1).map((row) => nextHeaders.map((header) => {
+    const index = sourceIndex.get(header);
+    return index === undefined ? "" : row[index] || "";
+  }));
+  const endCol = colName(nextHeaders.length);
+  const writePath = rangePath(sheetName, `A1:${endCol}${Math.max(nextRows.length + 1, 1)}`);
+  await valuesRequest(config, token, `${writePath}?valueInputOption=USER_ENTERED`, {
+    method: "PUT",
+    body: JSON.stringify({
+      range: `'${sheetName}'!A1:${endCol}${Math.max(nextRows.length + 1, 1)}`,
+      majorDimension: "ROWS",
+      values: [nextHeaders, ...nextRows]
+    })
+  });
+}
+
+async function getSheetProperties(config, token, sheetName) {
+  const metadata = await googleRequest(config, token, sheetsApiBase(config), { method: "GET" });
+  return metadata.sheets?.find((sheet) => sheet.properties?.title === sheetName)?.properties;
+}
+
+function headerIndex(headers, name) {
+  const index = headers.indexOf(name);
+  return index >= 0 ? index : null;
+}
+
+function dimensionRequest(sheetId, index, pixelSize) {
+  if (index === null) return null;
+  return {
+    updateDimensionProperties: {
+      range: {
+        sheetId,
+        dimension: "COLUMNS",
+        startIndex: index,
+        endIndex: index + 1
+      },
+      properties: { pixelSize },
+      fields: "pixelSize"
+    }
+  };
+}
+
+function repeatColumnFormat(sheetId, headers, name, format) {
+  const index = headerIndex(headers, name);
+  if (index === null) return null;
+  return {
+    repeatCell: {
+      range: {
+        sheetId,
+        startRowIndex: 1,
+        startColumnIndex: index,
+        endColumnIndex: index + 1
+      },
+      cell: { userEnteredFormat: format },
+      fields: Object.keys(format).map((key) => `userEnteredFormat.${key}`).join(",")
+    }
+  };
+}
+
+function formattingRequests(sheetId, headers, kind) {
+  const urlColumns = headers.filter((header) => header.includes("url"));
+  const dateColumns = headers.filter((header) => header.endsWith("_at") || header.endsWith("_time"));
+  const widthMap = {
+    project_key: 160,
+    event_id: 160,
+    event_time: 140,
+    title: 220,
+    knowledge_type: 120,
+    category: 140,
+    status: 100,
+    summary: 360,
+    tools: 180,
+    created_at: 150,
+    updated_at: 150,
+    update_count: 90,
+    last_event_type: 120,
+    event_type: 110,
+    save_mode: 110,
+    input_type: 110,
+    sensitive_info: 220,
+    note: 260,
+    slack_user: 120,
+    slack_channel: 130,
+    slack_ts: 130,
+    source: 130
+  };
+
+  const requests = [
+    {
+      updateSheetProperties: {
+        properties: {
+          sheetId,
+          gridProperties: { frozenRowCount: 1 }
+        },
+        fields: "gridProperties.frozenRowCount"
+      }
+    },
+    {
+      setBasicFilter: {
+        filter: {
+          range: {
+            sheetId,
+            startRowIndex: 0,
+            startColumnIndex: 0,
+            endColumnIndex: headers.length
+          }
+        }
+      }
+    },
+    {
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: 0,
+          endRowIndex: 1,
+          startColumnIndex: 0,
+          endColumnIndex: headers.length
+        },
+        cell: {
+          userEnteredFormat: {
+            backgroundColor: kind === "knowledge"
+              ? { red: 0.08, green: 0.32, blue: 0.55 }
+              : { red: 0.26, green: 0.34, blue: 0.18 },
+            horizontalAlignment: "CENTER",
+            verticalAlignment: "MIDDLE",
+            wrapStrategy: "WRAP",
+            textFormat: {
+              bold: true,
+              fontSize: 10,
+              foregroundColor: { red: 1, green: 1, blue: 1 }
+            }
+          }
+        },
+        fields: "userEnteredFormat(backgroundColor,horizontalAlignment,verticalAlignment,wrapStrategy,textFormat)"
+      }
+    },
+    {
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: 1,
+          startColumnIndex: 0,
+          endColumnIndex: headers.length
+        },
+        cell: {
+          userEnteredFormat: {
+            verticalAlignment: "TOP",
+            wrapStrategy: "CLIP",
+            textFormat: { fontSize: 10 }
+          }
+        },
+        fields: "userEnteredFormat(verticalAlignment,wrapStrategy,textFormat.fontSize)"
+      }
+    },
+    {
+      updateBorders: {
+        range: {
+          sheetId,
+          startRowIndex: 0,
+          startColumnIndex: 0,
+          endColumnIndex: headers.length
+        },
+        top: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.84, blue: 0.9 } },
+        bottom: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.84, blue: 0.9 } },
+        left: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.84, blue: 0.9 } },
+        right: { style: "SOLID", width: 1, color: { red: 0.8, green: 0.84, blue: 0.9 } },
+        innerHorizontal: { style: "SOLID", width: 1, color: { red: 0.88, green: 0.9, blue: 0.94 } },
+        innerVertical: { style: "SOLID", width: 1, color: { red: 0.88, green: 0.9, blue: 0.94 } }
+      }
+    },
+    {
+      updateDimensionProperties: {
+        range: {
+          sheetId,
+          dimension: "ROWS",
+          startIndex: 0,
+          endIndex: 1
+        },
+        properties: { pixelSize: 34 },
+        fields: "pixelSize"
+      }
+    },
+    {
+      updateDimensionProperties: {
+        range: {
+          sheetId,
+          dimension: "ROWS",
+          startIndex: 1,
+          endIndex: 1000
+        },
+        properties: { pixelSize: 30 },
+        fields: "pixelSize"
+      }
+    }
+  ];
+
+  for (const header of headers) {
+    const width = header.includes("url") ? 150 : widthMap[header] || 120;
+    requests.push(dimensionRequest(sheetId, headerIndex(headers, header), width));
+  }
+
+  requests.push(repeatColumnFormat(sheetId, headers, "summary", { wrapStrategy: "WRAP" }));
+  requests.push(repeatColumnFormat(sheetId, headers, "note", { wrapStrategy: "WRAP" }));
+  requests.push(repeatColumnFormat(sheetId, headers, "sensitive_info", { wrapStrategy: "WRAP" }));
+
+  for (const header of urlColumns) {
+    requests.push(repeatColumnFormat(sheetId, headers, header, {
+      wrapStrategy: "CLIP",
+      textFormat: {
+        foregroundColor: { red: 0.06, green: 0.32, blue: 0.72 },
+        underline: true,
+        fontSize: 9
+      }
+    }));
+  }
+
+  for (const header of dateColumns) {
+    requests.push(repeatColumnFormat(sheetId, headers, header, {
+      numberFormat: {
+        type: "DATE_TIME",
+        pattern: "yyyy-mm-dd hh:mm"
+      }
+    }));
+  }
+
+  return requests.filter(Boolean);
+}
+
+async function applySheetFormatting(config, token, sheetName, headers, kind, sheetProperties = null) {
+  const cacheKey = `${config.spreadsheetId}:${sheetName}:${headers.join("|")}`;
+  if (sheetFormatState.has(cacheKey)) return;
+  const properties = sheetProperties?.sheetId !== undefined
+    ? sheetProperties
+    : await getSheetProperties(config, token, sheetName);
+  if (properties?.sheetId === undefined) return;
+  await googleRequest(config, token, `${sheetsApiBase(config)}:batchUpdate`, {
+    method: "POST",
+    body: JSON.stringify({
+      requests: formattingRequests(properties.sheetId, headers, kind)
+    })
+  });
+  sheetFormatState.add(cacheKey);
 }
 
 function colName(index) {
@@ -205,17 +469,18 @@ function buildKnowledgeRow(payload, result, options = {}) {
     payload.status || "",
     payload.summary || "",
     parseTools(payload.tools).join(", "),
-    result.index_url || "",
-    rawUrl(result),
-    result.metadata_url || "",
     createdAt,
     updatedAt,
     String(options.updateCount ?? 0),
     options.lastEventType || eventType(payload, result),
+    result.index_url || "",
+    rawUrl(result),
+    result.metadata_url || "",
     options.lastUpdateUrl || updateUrl(result),
     payload.source || "",
     payload.input_type || "",
     sensitiveInfo(payload),
+    payload.slack_user || "",
     payload.slack_channel || "",
     payload.slack_ts || ""
   ];
@@ -224,23 +489,23 @@ function buildKnowledgeRow(payload, result, options = {}) {
 function buildEventRow(payload, result, options = {}) {
   return [
     payload.slack_event_id || `${result.project_key || payload.project_key}-${result.updated || Date.now()}`,
-    result.project_key || payload.project_key || "",
-    result.title || payload.title || "",
+    result.updated || "",
     options.eventType || eventType(payload, result),
     result.save_mode || payload.save_mode || "",
+    result.project_key || payload.project_key || "",
+    result.title || payload.title || "",
     result.knowledge_type || payload.knowledge_type || "",
     payload.category || "",
     payload.input_type || "",
+    payload.slack_user || "",
     result.index_url || "",
     rawUrl(result),
     result.metadata_url || "",
     updateUrl(result),
-    result.updated || "",
+    options.note || "",
     payload.slack_channel || "",
     payload.slack_ts || "",
-    payload.slack_user || "",
-    payload.source || "",
-    options.note || ""
+    payload.source || ""
   ];
 }
 
@@ -284,8 +549,10 @@ export async function syncKnowledgeToGoogleSheets(payload, result) {
   }
 
   const token = await getAccessToken(config);
-  await ensureHeaders(config, token, config.knowledgeSheetName, knowledgeHeaders);
-  await ensureHeaders(config, token, config.eventsSheetName, eventHeaders);
+  const knowledgeSheetProperties = await ensureHeaders(config, token, config.knowledgeSheetName, knowledgeHeaders);
+  const eventsSheetProperties = await ensureHeaders(config, token, config.eventsSheetName, eventHeaders);
+  await applySheetFormatting(config, token, config.knowledgeSheetName, knowledgeHeaders, "knowledge", knowledgeSheetProperties);
+  await applySheetFormatting(config, token, config.eventsSheetName, eventHeaders, "events", eventsSheetProperties);
 
   const rows = await readRows(config, token, config.knowledgeSheetName, knowledgeHeaders);
   const key = result.project_key || payload.project_key;
@@ -295,10 +562,10 @@ export async function syncKnowledgeToGoogleSheets(payload, result) {
 
   if (existingIndex >= 0) {
     const current = rows[existingIndex];
-    const currentUpdateCount = Number.parseInt(current[12] || "0", 10) || 0;
+    const currentUpdateCount = Number.parseInt(current[9] || "0", 10) || 0;
     const nextUpdateCount = type === "updated" ? currentUpdateCount + 1 : currentUpdateCount;
     const row = buildKnowledgeRow(payload, result, {
-      createdAt: current[10] || result.created || result.updated || "",
+      createdAt: current[7] || result.created || result.updated || "",
       updateCount: nextUpdateCount,
       lastEventType: type,
       lastUpdateUrl: updateUrl(result)
@@ -325,7 +592,7 @@ export async function syncKnowledgeToGoogleSheets(payload, result) {
   return {
     ok: true,
     skipped: false,
-    message: "Sheets更新済み",
+    message: "Sheets譖ｴ譁ｰ貂医∩",
     url: `https://docs.google.com/spreadsheets/d/${config.spreadsheetId}`,
     knowledge_sheet: config.knowledgeSheetName,
     events_sheet: config.eventsSheetName,

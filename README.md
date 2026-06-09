@@ -376,6 +376,39 @@ Google Sheets APIはサービスアカウント方式を想定しています。
 
 Sheets環境変数が未設定、またはSheets API更新に失敗した場合でも、GitHub保存が成功していれば全体失敗にはしません。Slackには「GitHub保存: 成功」と「Google Sheets: 成功 / 未設定 / 失敗: 理由」を分けて通知します。
 
+### Google Sheetsの表示整形
+
+保存・更新時に、`ナレッジ一覧` と `更新履歴` の管理表としての見やすさを保つため、Google Sheets APIで軽量な書式設定を再適用します。
+
+- 1行目を固定し、フィルタを有効化します。
+- ヘッダー行は太字、背景色付き、白文字、中央揃えにします。
+- 全体の文字サイズ、罫線、行高を読みやすい値に揃えます。
+- `summary`、`note`、`sensitive_info` は折り返し表示にします。
+- `github_index_url`、`raw_url`、`metadata_url`、`last_update_url`、`update_url` などのURL列は後ろ側に寄せ、幅を広げすぎない設定にします。
+- `created_at`、`updated_at`、`event_time` などの日時列は日時形式にします。
+- 既存ヘッダーが古い順序の場合は、列名を基準に推奨順へ並べ替えます。既存行は削除せず、未定義の独自列は既知列の後ろに残します。
+- Functionインスタンス内では書式適用済みシートをキャッシュし、保存のたびに過剰な `batchUpdate` を投げないようにしています。
+
+推奨列順:
+
+`ナレッジ一覧`
+
+```text
+project_key, title, knowledge_type, category, status, summary, tools,
+created_at, updated_at, update_count, last_event_type,
+github_index_url, raw_url, metadata_url, last_update_url,
+source, input_type, sensitive_info, slack_user, slack_channel, slack_ts
+```
+
+`更新履歴`
+
+```text
+event_id, event_time, event_type, save_mode, project_key, title,
+knowledge_type, category, input_type, slack_user,
+github_index_url, raw_url, metadata_url, update_url, note,
+slack_channel, slack_ts, source
+```
+
 ### Sheetsの2シート構成
 
 `ナレッジ一覧` は「1ナレッジ = 1行」の管理用シートです。主な列は以下です。
