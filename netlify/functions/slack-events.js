@@ -386,6 +386,12 @@ function confirmationBlocks(pending) {
     {
       type: "context",
       elements: [
+        mrkdwn(`frontmatter検出: ${payload.has_frontmatter ? "あり" : "なし"} / title_source: ${payload.title_source || "unknown"} / category_source: ${payload.category_source || "unknown"} / project_key_source: ${payload.project_key_source || "unknown"}`)
+      ]
+    },
+    {
+      type: "context",
+      elements: [
         mrkdwn(`frontmatter検出: ${payload.has_frontmatter ? "あり" : "なし"}`)
       ]
     },

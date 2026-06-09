@@ -305,6 +305,66 @@ function extractLabeledValueClean(text, labels) {
   return match?.[1]?.trim() || "";
 }
 
+function cleanFrontmatterValue(value) {
+  return normalizeSmartQuotes(String(value || ""))
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .trim();
+}
+
+function extractFrontmatterFields(text) {
+  const source = String(text || "").replace(/^\uFEFF/, "");
+  const lines = source.split(/\r?\n/);
+  let index = 0;
+  while (index < lines.length && !lines[index].trim()) index += 1;
+  if (lines[index]?.trim() !== "---") {
+    return { data: {}, detected: false, closed: false, endIndex: 0 };
+  }
+
+  const data = {};
+  let closed = false;
+  let cursor = index + 1;
+  for (; cursor < lines.length; cursor += 1) {
+    const line = lines[cursor];
+    const trimmed = line.trim();
+    if (trimmed === "---") {
+      closed = true;
+      cursor += 1;
+      break;
+    }
+    if (!trimmed && Object.keys(data).length > 0) {
+      cursor += 1;
+      break;
+    }
+    if (!trimmed) continue;
+    const item = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*?)\s*$/);
+    if (!item) {
+      if (Object.keys(data).length > 0) break;
+      continue;
+    }
+    data[item[1]] = cleanFrontmatterValue(item[2]);
+  }
+
+  return {
+    data,
+    detected: Object.keys(data).length > 0,
+    closed,
+    endIndex: cursor
+  };
+}
+
+function removeFrontmatterBlock(text, frontmatterInfo) {
+  if (!frontmatterInfo?.detected) return String(text || "");
+  return String(text || "").replace(/^\uFEFF/, "").split(/\r?\n/).slice(frontmatterInfo.endIndex).join("\n");
+}
+
+function extractLabeledValueSafe(text, labels) {
+  const escaped = labels.map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const pattern = new RegExp(`^(?:${escaped})\\s*[:：]\\s*(.+)$`, "im");
+  const match = String(text || "").match(pattern);
+  return match?.[1]?.trim() || "";
+}
+
 function markdownHeading(text) {
   const generic = new Set([
     "タイトル案",
@@ -685,7 +745,7 @@ function buildAutoKnowledgePayloadCurrent({ text, fileName = "", supplementalTex
   };
 }
 
-export function buildAutoKnowledgePayload({ text, fileName = "", supplementalText = "", source = "slack_event", slack = {} }) {
+function buildAutoKnowledgePayloadStrictFrontmatter({ text, fileName = "", supplementalText = "", source = "slack_event", slack = {} }) {
   const body = String(text || "").replace(/^\uFEFF/, "").trim();
   const supplemental = String(supplementalText || "").trim();
   const inputType = detectInputType(body, fileName);
@@ -795,6 +855,123 @@ export function buildAutoKnowledgePayload({ text, fileName = "", supplementalTex
   };
 }
 
+export function buildAutoKnowledgePayload({ text, fileName = "", supplementalText = "", source = "slack_event", slack = {} }) {
+  const body = String(text || "").replace(/^\uFEFF/, "").trim();
+  const supplemental = String(supplementalText || "").trim();
+  const inputType = detectInputType(body, fileName);
+  const jsonResult = inputType === "json" ? parseFlexibleJson(body) : null;
+  const parsed = jsonResult?.valid && isPlainObject(jsonResult.parsed) ? jsonResult.parsed : {};
+  const frontmatterInfo = extractFrontmatterFields(body);
+  const frontmatter = frontmatterInfo.data;
+  const hasFrontmatter = frontmatterInfo.detected;
+  const bodyWithoutFrontmatter = removeFrontmatterBlock(body, frontmatterInfo);
+  const heading = markdownHeading(bodyWithoutFrontmatter);
+  const labeledTitle = extractLabeledValueSafe(bodyWithoutFrontmatter, ["タイトル案", "タイトル", "title"]);
+  const labeledCategory = extractLabeledValueSafe(bodyWithoutFrontmatter, ["カテゴリ", "category"]);
+  const labeledSummary = extractLabeledValueSafe(bodyWithoutFrontmatter, ["概要", "summary"]);
+  const firstParagraph = bodyWithoutFrontmatter
+    .split(/\r?\n\s*\r?\n/)
+    .map((item) => item.split(/\r?\n/).filter((line) => !/^#{1,6}\s+/.test(line.trim())).join("\n"))
+    .map((item) => item.replace(/^[-*\s]+/, "").trim())
+    .filter((item) => !isGenericSectionLabel(item))
+    .find(Boolean) || "";
+
+  const titleCandidates = [
+    ["json.title", parsed.title],
+    ["json.project_title", parsed.project_title],
+    ["frontmatter.title", frontmatter.title],
+    ["markdown_heading", heading],
+    ["labeled_title", labeledTitle],
+    ["file_name", filenameTitle(fileName)],
+    ["fallback", "無題ナレッジ"]
+  ];
+  const titleCandidate = titleCandidates.find(([, value]) => firstNonEmpty(value)) || titleCandidates.at(-1);
+  const titleSource = titleCandidate[0];
+  const title = humanText(titleCandidate[1], "無題ナレッジ");
+
+  const categoryCandidates = [
+    ["json.category", parsed.category],
+    ["json.project_category", parsed.project_category],
+    ["frontmatter.category", frontmatter.category],
+    ["labeled_category", labeledCategory],
+    ["keyword", inferCategoryFromText(`${title}\n${bodyWithoutFrontmatter}`)]
+  ];
+  const categoryCandidate = categoryCandidates.find(([, value]) => firstNonEmpty(value)) || ["fallback", "未分類"];
+  const categorySource = categoryCandidate[0];
+  const category = humanText(categoryCandidate[1], "未分類");
+
+  const rawStatus = humanText(firstNonEmpty(parsed.status, frontmatter.status, "saved"), "saved");
+  const status = statuses.has(rawStatus) ? rawStatus : "saved";
+  const summary = humanText(firstNonEmpty(
+    parsed.summary,
+    parsed.implementation_summary,
+    parsed.article_main_message,
+    frontmatter.summary,
+    labeledSummary,
+    firstParagraph ? firstParagraph.slice(0, 280) : ""
+  ), "概要未設定");
+  const rawKnowledgeType = String(firstNonEmpty(parsed.knowledge_type, parsed.type, frontmatter.knowledge_type, "notes"));
+  const knowledgeType = knowledgeTypeFolders[rawKnowledgeType] ? rawKnowledgeType : "notes";
+  const { projectKey, source: projectKeySource } = inferProjectKey({ parsed, frontmatter, title, titleSource, heading, fileName, body });
+  const tools = extractKnownTools(body, parsed.tools_used || parsed.tools || frontmatter.tools || "");
+  const warnings = detectSensitiveWarnings(`${body}\n${supplemental}`);
+  const hasAttachment = Boolean(slack.file_name || fileName);
+  const sourceType = slack.source_type || (
+    hasAttachment && supplemental ? "slack_text_and_file" :
+      hasAttachment ? "slack_file" :
+        source === "web" ? "web_paste" : "slack_text"
+  );
+  const jsonParseWarning = inputType === "json" && jsonResult && !jsonResult.valid
+    ? "JSONとしては解析できませんでしたが、テキストとして保存できます。"
+    : "";
+
+  return {
+    title,
+    title_source: titleSource,
+    knowledge_type: knowledgeType,
+    project_key: projectKey,
+    project_key_source: projectKeySource,
+    category,
+    category_source: categorySource,
+    status,
+    tools,
+    summary,
+    input_type: inputType,
+    has_frontmatter: hasFrontmatter,
+    frontmatter_closed: frontmatterInfo.closed,
+    body,
+    supplemental_text: supplemental,
+    save_mode: "upsert",
+    source,
+    source_type: sourceType,
+    file_name: slack.file_name || fileName || "",
+    file_size: Number(slack.file_size || 0) || 0,
+    char_count: body.length,
+    has_attachment: hasAttachment,
+    has_supplemental_text: Boolean(supplemental),
+    parsed_json_available: Boolean(jsonResult?.valid),
+    slack_channel: slack.channel || "",
+    slack_ts: slack.ts || "",
+    slack_user: slack.user || "",
+    slack_message_url: slack.message_url || "",
+    slack_event_id: slack.event_id || "",
+    json_parse_warning: jsonParseWarning,
+    warnings,
+    extracted: {
+      private_or_sensitive_info_to_hide: parsed.private_or_sensitive_info_to_hide || warnings,
+      media_theme: parsed.media_theme || parsed.theme || "",
+      article_main_message: humanText(parsed.article_main_message),
+      content_strategy: humanText(parsed.content_strategy),
+      wordpress_article_angles: parsed.wordpress_article_angles || "",
+      note_article_angles: parsed.note_article_angles || "",
+      x_threads_post_ideas: parsed.x_threads_post_ideas || ""
+    },
+    created_at: humanText(parsed.created_at || frontmatter.created_at),
+    updated_at: humanText(parsed.updated_at || frontmatter.updated_at),
+    theme: humanText(parsed.media_theme || parsed.theme || frontmatter.theme)
+  };
+}
+
 function yamlQuote(value) {
   return JSON.stringify(String(value || ""));
 }
@@ -840,6 +1017,7 @@ export function normalizeKnowledgePayload(input) {
     file_reference: String(input.file_reference || "").trim(),
     project_key_source: String(input.project_key_source || "").trim(),
     title_source: String(input.title_source || "").trim(),
+    category_source: String(input.category_source || "").trim(),
     created_at: String(input.created_at || "").trim(),
     updated_at: String(input.updated_at || "").trim(),
     theme: String(input.theme || "").trim(),
@@ -1087,6 +1265,7 @@ function buildMetadata(payload, created, updated, paths, existingMetadata = null
     project_key: payload.project_key,
     project_key_source: payload.project_key_source || existingMetadata?.project_key_source || "",
     title_source: payload.title_source || existingMetadata?.title_source || "",
+    category_source: payload.category_source || existingMetadata?.category_source || "",
     knowledge_type: payload.knowledge_type,
     category: payload.category,
     status: payload.status,
@@ -1101,6 +1280,7 @@ function buildMetadata(payload, created, updated, paths, existingMetadata = null
     char_count: payload.char_count || payload.body.length,
     has_attachment: payload.has_attachment,
     has_frontmatter: payload.has_frontmatter,
+    frontmatter_closed: payload.frontmatter_closed,
     has_supplemental_text: payload.has_supplemental_text || Boolean(payload.supplemental_text),
     parsed_json_available: payload.parsed_json_available || false,
     save_mode: payload.save_mode,
