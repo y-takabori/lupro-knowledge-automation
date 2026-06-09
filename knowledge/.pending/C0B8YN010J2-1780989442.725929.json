@@ -1,7 +1,7 @@
 {
   "pending_key": "C0B8YN010J2-1780989442.725929",
   "dedupe_key": "Ev0BA2JCM6PJ",
-  "status": "pending",
+  "status": "saved",
   "created_at": "2026-06-09T07:17:25.293Z",
   "channel": "C0B8YN010J2",
   "thread_ts": "1780989442.725929",
@@ -87,5 +87,34 @@
     "theme": "LUPRO実践ナレッジをnote発信・GitHubテンプレート・有料導入マニュアル・実装支援へ展開するための商品設計"
   },
   "candidates": [],
-  "confirmation_message_ts": "1780989446.145149"
+  "confirmation_message_ts": "1780989446.145149",
+  "updated_at": "2026-06-09T07:18:21.981Z",
+  "result": {
+    "message": "Saved knowledge to GitHub.",
+    "title": "LUPRO実践ナレッジ：note集約とGitHubテンプレート型マネタイズへの方針転換",
+    "knowledge_type": "notes",
+    "project_key": "lupro-note-github",
+    "project_key_source": "json.title",
+    "save_mode": "new",
+    "index_path": "knowledge/notes/lupro-note-github/index.md",
+    "raw_json_path": "knowledge/notes/lupro-note-github/raw.json",
+    "raw_md_path": "knowledge/notes/lupro-note-github/raw.md",
+    "raw_txt_path": "knowledge/notes/lupro-note-github/raw.txt",
+    "raw_path": "knowledge/notes/lupro-note-github/raw.json",
+    "metadata_path": "knowledge/notes/lupro-note-github/metadata.json",
+    "update_path": "",
+    "update_json_path": "",
+    "created": "2026-06-09T16:18:14+09:00",
+    "updated": "2026-06-09T16:18:14+09:00",
+    "index_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/lupro-note-github/index.md",
+    "raw_json_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/lupro-note-github/raw.json",
+    "raw_md_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/lupro-note-github/raw.md",
+    "raw_txt_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/lupro-note-github/raw.txt",
+    "raw_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/lupro-note-github/raw.json",
+    "metadata_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/lupro-note-github/metadata.json",
+    "update_url": "",
+    "update_json_url": "",
+    "is_update": false,
+    "json_parse_warning": ""
+  }
 }
