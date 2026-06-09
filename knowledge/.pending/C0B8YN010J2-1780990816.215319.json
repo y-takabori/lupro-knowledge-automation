@@ -1,7 +1,7 @@
 {
   "pending_key": "C0B8YN010J2-1780990816.215319",
   "dedupe_key": "Ev0B96CQU95L",
-  "status": "pending",
+  "status": "saved",
   "created_at": "2026-06-09T07:40:18.885Z",
   "channel": "C0B8YN010J2",
   "thread_ts": "1780990816.215319",
@@ -97,5 +97,38 @@
       "similar_reason": "本文の語句が近い"
     }
   ],
-  "confirmation_message_ts": "1780990819.905529"
+  "confirmation_message_ts": "1780990819.905529",
+  "updated_at": "2026-06-09T07:41:01.058Z",
+  "result": {
+    "message": "Saved knowledge to GitHub.",
+    "title": "タイトル案",
+    "knowledge_type": "notes",
+    "project_key": "20260609-1640-9632fdcc",
+    "project_key_source": "markdown_heading",
+    "save_mode": "new",
+    "index_path": "knowledge/notes/20260609-1640-9632fdcc/index.md",
+    "raw_json_path": "knowledge/notes/20260609-1640-9632fdcc/raw.json",
+    "raw_md_path": "knowledge/notes/20260609-1640-9632fdcc/raw.md",
+    "raw_txt_path": "knowledge/notes/20260609-1640-9632fdcc/raw.txt",
+    "raw_path": "knowledge/notes/20260609-1640-9632fdcc/raw.txt",
+    "metadata_path": "knowledge/notes/20260609-1640-9632fdcc/metadata.json",
+    "supplemental_path": "knowledge/notes/20260609-1640-9632fdcc/supplemental.md",
+    "update_path": "",
+    "update_json_path": "",
+    "update_txt_path": "",
+    "created": "2026-06-09T16:40:48+09:00",
+    "updated": "2026-06-09T16:40:48+09:00",
+    "index_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/20260609-1640-9632fdcc/index.md",
+    "raw_json_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/20260609-1640-9632fdcc/raw.json",
+    "raw_md_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/20260609-1640-9632fdcc/raw.md",
+    "raw_txt_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/20260609-1640-9632fdcc/raw.txt",
+    "raw_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/20260609-1640-9632fdcc/raw.txt",
+    "metadata_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/20260609-1640-9632fdcc/metadata.json",
+    "supplemental_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/20260609-1640-9632fdcc/supplemental.md",
+    "update_url": "",
+    "update_json_url": "",
+    "update_txt_url": "",
+    "is_update": false,
+    "json_parse_warning": ""
+  }
 }
