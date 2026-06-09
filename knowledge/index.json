@@ -1,5 +1,29 @@
 [
   {
+    "title": "Google Sheets連携テスト3",
+    "project_key": "google-sheets-3",
+    "knowledge_type": "notes",
+    "category": "未分類",
+    "status": "saved",
+    "tools": [
+      "ChatGPT",
+      "Codex",
+      "GitHub",
+      "Netlify",
+      "Slack",
+      "Google Sheets"
+    ],
+    "summary": "# Google Sheets連携テスト3\n\nSlackから保存したナレッジが、GitHubだけでなくGoogleスプレッドシートにも一覧化されるか再確認しています。\n\n目的：\nGOOGLE_PRIVATE_KEY修正後に、ナレッジ一覧と更新履歴に自動で行が追加されることを確認する。\n\n使用ツール：\nChatGPT,",
+    "theme": "",
+    "path": "knowledge/notes/google-sheets-3/index.md",
+    "raw_json_path": "knowledge/notes/google-sheets-3/raw.json",
+    "raw_md_path": "knowledge/notes/google-sheets-3/raw.md",
+    "raw_txt_path": "knowledge/notes/google-sheets-3/raw.txt",
+    "raw_path": "knowledge/notes/google-sheets-3/raw.md",
+    "created": "2026-06-09T10:05:56+09:00",
+    "updated": "2026-06-09T10:05:56+09:00"
+  },
+  {
     "title": "Google Sheets連携テスト2",
     "project_key": "google-sheets-2",
     "knowledge_type": "notes",
