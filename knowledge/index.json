@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "title": "LUPRO実践ナレッジ：note集約とGitHubテンプレート型マネタイズへの方針転換",
+    "project_key": "lupro-note-github",
+    "knowledge_type": "notes",
+    "category": "AI業務効率化 / 発信戦略 / 商品設計",
+    "status": "draft",
+    "tools": [
+      "ChatGPT",
+      "Codex",
+      "GitHub",
+      "Netlify",
+      "Slack",
+      "Notion",
+      "WordPress",
+      "note",
+      "X",
+      "Threads"
+    ],
+    "summary": "[object Object]",
+    "theme": "LUPRO実践ナレッジをnote発信・GitHubテンプレート・有料導入マニュアル・実装支援へ展開するための商品設計",
+    "path": "knowledge/notes/lupro-note-github/index.md",
+    "raw_json_path": "knowledge/notes/lupro-note-github/raw.json",
+    "raw_md_path": "knowledge/notes/lupro-note-github/raw.md",
+    "raw_txt_path": "knowledge/notes/lupro-note-github/raw.txt",
+    "raw_path": "knowledge/notes/lupro-note-github/raw.json",
+    "created": "2026-06-09T16:18:14+09:00",
+    "updated": "2026-06-09T16:18:14+09:00"
+  }
+]
