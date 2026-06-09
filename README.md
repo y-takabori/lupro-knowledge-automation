@@ -783,6 +783,7 @@ closing `---` がない場合でも、冒頭に `title:` / `category:` / `status
 日本語タイトルは無理にローマ字変換しません。既知キーワードを含む場合は意味のある英数字slugへ寄せ、難しい場合だけ日時hashへフォールバックします。日時hashにフォールバックした場合、Slack確認カードに「内容を編集」から修正できる警告を表示します。
 
 Google Sheetsへ書き込む値は、配列・オブジェクトをそのまま渡さず、人間が読める短文に整形します。`summary` が object / array の場合は `summary` / `text` / `value` / `description` / `body` / `implementation_summary` / `article_main_message` / `facts` / `inferences` などを優先して抽出し、`[object Object]` が出ないようにします。
+`summary` が明示されていない場合は、`description`、`theme`、`article_main_message`、概要・背景系セクション、本文中の自然文を順に使います。`tools`、`media_use`、APIキー注意文、短すぎる `no` などはsummary候補から除外します。
 
 ## 出力物の紐づけ管理
 

@@ -365,6 +365,83 @@ function extractLabeledValueSafe(text, labels) {
   return match?.[1]?.trim() || "";
 }
 
+function compactSummaryText(value) {
+  return humanText(value)
+    .replace(/^[#>*\-\s]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function looksLikeToolList(value) {
+  const text = compactSummaryText(value);
+  if (!text) return true;
+  if (/^(no|none|n\/a|なし|未設定)$/i.test(text)) return true;
+  if (/^(tools?|使用ツール|media_use|media use|媒体|投稿先)\s*[:：]/i.test(text)) return true;
+  if (/(^|\s)(tools?|media_use|note|x\/threads)\s*[:：]/i.test(text) && text.length < 180) return true;
+  const knownTools = ["ChatGPT", "Codex", "Slack", "GitHub", "Netlify", "Google Sheets", "Google Cloud", "Notion", "WordPress", "note", "X/Threads", "Threads"];
+  const hits = knownTools.filter((tool) => text.toLowerCase().includes(tool.toLowerCase())).length;
+  const separators = (text.match(/[,*・/]| \* /g) || []).length;
+  return hits >= 4 && separators >= 3 && !/[。.!?]/.test(text);
+}
+
+function isUsefulSummary(value) {
+  const text = compactSummaryText(value);
+  if (text.length < 18) return false;
+  if (looksLikeToolList(text)) return false;
+  if (/(api[_-]?key|secret|token|bearer)/i.test(text) && text.length < 160) return false;
+  return true;
+}
+
+function firstUsefulSummary(...values) {
+  for (const value of values) {
+    const text = compactSummaryText(value);
+    if (isUsefulSummary(text)) return text.slice(0, 300);
+  }
+  return "";
+}
+
+function sectionIntro(text, labels) {
+  const lines = String(text || "").split(/\r?\n/);
+  const labelPattern = new RegExp(`^(?:#{1,6}\\s*)?(?:${labels.map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\s*[:：]?\\s*$`, "i");
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!labelPattern.test(lines[index].trim())) continue;
+    const collected = [];
+    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+      const line = lines[cursor].trim();
+      if (!line) {
+        if (collected.length) break;
+        continue;
+      }
+      if (/^#{1,6}\s+/.test(line)) break;
+      if (/^(tools?|使用ツール|media_use|媒体|投稿先)\s*[:：]/i.test(line)) break;
+      collected.push(line.replace(/^[-*]\s+/, ""));
+      if (collected.join(" ").length >= 260) break;
+    }
+    const candidate = collected.join(" ");
+    if (isUsefulSummary(candidate)) return candidate.slice(0, 300);
+  }
+  return "";
+}
+
+function naturalBodySummary(text) {
+  const skipHeading = /^(#{1,6}\s+)?(tools?|使用ツール|media_use|媒体|投稿先|公開時に伏せる情報|要確認ポイント|タイトル案|タイトル)\s*[:：]?/i;
+  const paragraphs = String(text || "")
+    .split(/\r?\n\s*\r?\n/)
+    .map((paragraph) => paragraph
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !skipHeading.test(line) && !/^[-*]\s*(ChatGPT|Codex|Slack|GitHub|Netlify|Google Sheets|Google Cloud|note|X\/Threads|Threads)\b/i.test(line))
+      .map((line) => line.replace(/^#{1,6}\s+/, "").replace(/^[-*]\s+/, ""))
+      .join(" "))
+    .map((paragraph) => paragraph.replace(/\s+/g, " ").trim())
+    .filter((paragraph) => isUsefulSummary(paragraph));
+  return paragraphs[0]?.slice(0, 300) || "";
+}
+
+function stripSummaryLabel(value) {
+  return compactSummaryText(value).replace(/^(summary|概要)\s*[:：]\s*/i, "").trim();
+}
+
 function markdownHeading(text) {
   const generic = new Set([
     "タイトル案",
@@ -679,7 +756,7 @@ function buildAutoKnowledgePayloadCurrent({ text, fileName = "", supplementalTex
   ), "未分類");
   const rawStatus = humanText(firstNonEmpty(parsed.status, frontmatter.status, "saved"), "saved");
   const status = statuses.has(rawStatus) ? rawStatus : "saved";
-  const summary = humanText(firstNonEmpty(
+  const rawSummary = humanText(firstNonEmpty(
     parsed.summary,
     parsed.implementation_summary,
     parsed.article_main_message,
@@ -687,6 +764,81 @@ function buildAutoKnowledgePayloadCurrent({ text, fileName = "", supplementalTex
     labeledSummary,
     firstParagraph ? firstParagraph.slice(0, 280) : ""
   ), "概要未設定");
+  const duplicateSectionSummary = sectionIntro(bodyWithoutFrontmatter, [
+    "このプロジェクトの背景",
+    "本当に解決したかったこと",
+    "summary",
+    "概要",
+    "背景",
+    "目的",
+    "実現したいこと"
+  ]);
+  const duplicateSummary = firstUsefulSummary(
+    parsed.summary,
+    frontmatter.summary,
+    parsed.description,
+    frontmatter.description,
+    parsed.theme,
+    frontmatter.theme,
+    parsed.media_theme,
+    parsed.article_main_message,
+    parsed.implementation_summary,
+    labeledSummary,
+    duplicateSectionSummary,
+    firstParagraph ? firstParagraph.slice(0, 280) : "",
+    naturalBodySummary(bodyWithoutFrontmatter),
+    rawSummary
+  ) || "概要未設定";
+  const sectionSummary = sectionIntro(bodyWithoutFrontmatter, [
+    "このプロジェクトの背景",
+    "本当に解決したかったこと",
+    "summary",
+    "概要",
+    "背景",
+    "目的",
+    "実現したいこと"
+  ]);
+  const activeDuplicateSummary = firstUsefulSummary(
+    parsed.summary,
+    frontmatter.summary,
+    parsed.description,
+    frontmatter.description,
+    parsed.theme,
+    frontmatter.theme,
+    parsed.media_theme,
+    parsed.article_main_message,
+    parsed.implementation_summary,
+    labeledSummary,
+    sectionSummary,
+    firstParagraph ? firstParagraph.slice(0, 280) : "",
+    naturalBodySummary(bodyWithoutFrontmatter),
+    rawSummary
+  ) || "概要未設定";
+  const activeSectionSummary = sectionIntro(bodyWithoutFrontmatter, [
+    "このプロジェクトの背景",
+    "本当に解決したかったこと",
+    "summary",
+    "概要",
+    "背景",
+    "目的",
+    "実現したいこと"
+  ]);
+  const summary = firstUsefulSummary(
+    parsed.summary,
+    frontmatter.summary,
+    parsed.description,
+    frontmatter.description,
+    parsed.theme,
+    frontmatter.theme,
+    parsed.media_theme,
+    parsed.article_main_message,
+    parsed.implementation_summary,
+    labeledSummary,
+    activeSectionSummary,
+    firstParagraph ? firstParagraph.slice(0, 280) : "",
+    naturalBodySummary(bodyWithoutFrontmatter),
+    rawSummary
+  ) || "概要未設定";
   const rawKnowledgeType = String(firstNonEmpty(parsed.knowledge_type, parsed.type, frontmatter.knowledge_type, "notes"));
   const knowledgeType = knowledgeTypeFolders[rawKnowledgeType] ? rawKnowledgeType : "notes";
   const { projectKey, source: projectKeySource } = inferProjectKey({ parsed, frontmatter, title, heading, fileName, body });
@@ -787,7 +939,7 @@ function buildAutoKnowledgePayloadStrictFrontmatter({ text, fileName = "", suppl
   ), "未分類");
   const rawStatus = humanText(firstNonEmpty(parsed.status, frontmatter.status, "saved"), "saved");
   const status = statuses.has(rawStatus) ? rawStatus : "saved";
-  const summary = humanText(firstNonEmpty(
+  const rawSummary = humanText(firstNonEmpty(
     parsed.summary,
     parsed.implementation_summary,
     parsed.article_main_message,
@@ -855,7 +1007,7 @@ function buildAutoKnowledgePayloadStrictFrontmatter({ text, fileName = "", suppl
   };
 }
 
-export function buildAutoKnowledgePayload({ text, fileName = "", supplementalText = "", source = "slack_event", slack = {} }) {
+function buildAutoKnowledgePayloadLooseFrontmatter({ text, fileName = "", supplementalText = "", source = "slack_event", slack = {} }) {
   const body = String(text || "").replace(/^\uFEFF/, "").trim();
   const supplemental = String(supplementalText || "").trim();
   const inputType = detectInputType(body, fileName);
@@ -902,7 +1054,7 @@ export function buildAutoKnowledgePayload({ text, fileName = "", supplementalTex
 
   const rawStatus = humanText(firstNonEmpty(parsed.status, frontmatter.status, "saved"), "saved");
   const status = statuses.has(rawStatus) ? rawStatus : "saved";
-  const summary = humanText(firstNonEmpty(
+  const rawSummary = humanText(firstNonEmpty(
     parsed.summary,
     parsed.implementation_summary,
     parsed.article_main_message,
@@ -938,6 +1090,134 @@ export function buildAutoKnowledgePayload({ text, fileName = "", supplementalTex
     summary,
     input_type: inputType,
     has_frontmatter: hasFrontmatter,
+    frontmatter_closed: frontmatterInfo.closed,
+    body,
+    supplemental_text: supplemental,
+    save_mode: "upsert",
+    source,
+    source_type: sourceType,
+    file_name: slack.file_name || fileName || "",
+    file_size: Number(slack.file_size || 0) || 0,
+    char_count: body.length,
+    has_attachment: hasAttachment,
+    has_supplemental_text: Boolean(supplemental),
+    parsed_json_available: Boolean(jsonResult?.valid),
+    slack_channel: slack.channel || "",
+    slack_ts: slack.ts || "",
+    slack_user: slack.user || "",
+    slack_message_url: slack.message_url || "",
+    slack_event_id: slack.event_id || "",
+    json_parse_warning: jsonParseWarning,
+    warnings,
+    extracted: {
+      private_or_sensitive_info_to_hide: parsed.private_or_sensitive_info_to_hide || warnings,
+      media_theme: parsed.media_theme || parsed.theme || "",
+      article_main_message: humanText(parsed.article_main_message),
+      content_strategy: humanText(parsed.content_strategy),
+      wordpress_article_angles: parsed.wordpress_article_angles || "",
+      note_article_angles: parsed.note_article_angles || "",
+      x_threads_post_ideas: parsed.x_threads_post_ideas || ""
+    },
+    created_at: humanText(parsed.created_at || frontmatter.created_at),
+    updated_at: humanText(parsed.updated_at || frontmatter.updated_at),
+    theme: humanText(parsed.media_theme || parsed.theme || frontmatter.theme)
+  };
+}
+
+export function buildAutoKnowledgePayload({ text, fileName = "", supplementalText = "", source = "slack_event", slack = {} }) {
+  const body = String(text || "").replace(/^\uFEFF/, "").trim();
+  const supplemental = String(supplementalText || "").trim();
+  const inputType = detectInputType(body, fileName);
+  const jsonResult = inputType === "json" ? parseFlexibleJson(body) : null;
+  const parsed = jsonResult?.valid && isPlainObject(jsonResult.parsed) ? jsonResult.parsed : {};
+  const frontmatterInfo = extractFrontmatterFields(body);
+  const frontmatter = frontmatterInfo.data;
+  const bodyWithoutFrontmatter = removeFrontmatterBlock(body, frontmatterInfo);
+  const heading = markdownHeading(bodyWithoutFrontmatter);
+  const labeledTitle = extractLabeledValueSafe(bodyWithoutFrontmatter, ["タイトル案", "タイトル", "title"]);
+  const labeledCategory = extractLabeledValueSafe(bodyWithoutFrontmatter, ["カテゴリ", "category"]);
+  const labeledSummary = extractLabeledValueSafe(bodyWithoutFrontmatter, ["概要", "summary"]);
+  const firstParagraph = naturalBodySummary(bodyWithoutFrontmatter);
+
+  const titleCandidates = [
+    ["json.title", parsed.title],
+    ["json.project_title", parsed.project_title],
+    ["frontmatter.title", frontmatter.title],
+    ["markdown_heading", heading],
+    ["labeled_title", labeledTitle],
+    ["file_name", filenameTitle(fileName)],
+    ["fallback", "無題ナレッジ"]
+  ];
+  const titleCandidate = titleCandidates.find(([, value]) => firstNonEmpty(value)) || titleCandidates.at(-1);
+  const titleSource = titleCandidate[0];
+  const title = humanText(titleCandidate[1], "無題ナレッジ");
+
+  const categoryCandidates = [
+    ["json.category", parsed.category],
+    ["json.project_category", parsed.project_category],
+    ["frontmatter.category", frontmatter.category],
+    ["labeled_category", labeledCategory],
+    ["keyword", inferCategoryFromText(`${title}\n${bodyWithoutFrontmatter}`)]
+  ];
+  const categoryCandidate = categoryCandidates.find(([, value]) => firstNonEmpty(value)) || ["fallback", "未分類"];
+  const categorySource = categoryCandidate[0];
+  const category = humanText(categoryCandidate[1], "未分類");
+
+  const rawStatus = humanText(firstNonEmpty(parsed.status, frontmatter.status, "saved"), "saved");
+  const status = statuses.has(rawStatus) ? rawStatus : "saved";
+  const sectionSummary = sectionIntro(bodyWithoutFrontmatter, [
+    "このプロジェクトの背景",
+    "本当に解決したかったこと",
+    "summary",
+    "概要",
+    "背景",
+    "目的",
+    "実現したいこと"
+  ]);
+  const summary = firstUsefulSummary(
+    parsed.summary,
+    frontmatter.summary,
+    parsed.description,
+    frontmatter.description,
+    parsed.theme,
+    frontmatter.theme,
+    parsed.media_theme,
+    parsed.article_main_message,
+    parsed.implementation_summary,
+    labeledSummary,
+    sectionSummary,
+    firstParagraph,
+    humanText(firstNonEmpty(parsed.summary, parsed.implementation_summary, parsed.article_main_message, frontmatter.summary, labeledSummary))
+  ) || "概要未設定";
+
+  const rawKnowledgeType = String(firstNonEmpty(parsed.knowledge_type, parsed.type, frontmatter.knowledge_type, "notes"));
+  const knowledgeType = knowledgeTypeFolders[rawKnowledgeType] ? rawKnowledgeType : "notes";
+  const { projectKey, source: projectKeySource } = inferProjectKey({ parsed, frontmatter, title, titleSource, heading, fileName, body });
+  const tools = extractKnownTools(body, parsed.tools_used || parsed.tools || frontmatter.tools || "");
+  const warnings = detectSensitiveWarnings(`${body}\n${supplemental}`);
+  const hasAttachment = Boolean(slack.file_name || fileName);
+  const sourceType = slack.source_type || (
+    hasAttachment && supplemental ? "slack_text_and_file" :
+      hasAttachment ? "slack_file" :
+        source === "web" ? "web_paste" : "slack_text"
+  );
+  const jsonParseWarning = inputType === "json" && jsonResult && !jsonResult.valid
+    ? "JSONとしては解析できませんでしたが、テキストとして保存できます。"
+    : "";
+
+  return {
+    title,
+    title_source: titleSource,
+    knowledge_type: knowledgeType,
+    project_key: projectKey,
+    project_key_source: projectKeySource,
+    category,
+    category_source: categorySource,
+    status,
+    tools,
+    summary: stripSummaryLabel(summary) || summary,
+    input_type: inputType,
+    has_frontmatter: frontmatterInfo.detected,
     frontmatter_closed: frontmatterInfo.closed,
     body,
     supplemental_text: supplemental,
