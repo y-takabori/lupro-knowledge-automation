@@ -1,0 +1,121 @@
+{
+  "pending_key": "C0B8YN010J2-1780966903.553409",
+  "dedupe_key": "Ev0B90184XC3",
+  "status": "pending",
+  "created_at": "2026-06-09T01:01:46.087Z",
+  "channel": "C0B8YN010J2",
+  "thread_ts": "1780966903.553409",
+  "user": "U08H3PUHUAX",
+  "payload": {
+    "title": "Google Sheets連携テスト2",
+    "knowledge_type": "notes",
+    "project_key": "google-sheets-2",
+    "project_key_source": "markdown_heading",
+    "category": "未分類",
+    "status": "saved",
+    "tools": [
+      "ChatGPT",
+      "Codex",
+      "GitHub",
+      "Netlify",
+      "Slack",
+      "Google Sheets"
+    ],
+    "summary": "# Google Sheets連携テスト2\n\nSlackから保存したナレッジが、GitHubだけでなくGoogleスプレッドシートにも一覧化されるか再確認しています。\n\n目的：\nGOOGLE_PRIVATE_KEY修正後に、ナレッジ一覧と更新履歴に自動で行が追加されることを確認する。\n\n使用ツール：\nChatGPT, ",
+    "input_type": "markdown",
+    "body": "# Google Sheets連携テスト2\n\nSlackから保存したナレッジが、GitHubだけでなくGoogleスプレッドシートにも一覧化されるか再確認しています。\n\n目的：\nGOOGLE_PRIVATE_KEY修正後に、ナレッジ一覧と更新履歴に自動で行が追加されることを確認する。\n\n使用ツール：\nChatGPT, Codex, Slack, GitHub, Netlify, Google Sheets",
+    "supplemental_text": "",
+    "save_mode": "upsert",
+    "source": "slack_event",
+    "slack_channel": "C0B8YN010J2",
+    "slack_ts": "1780966903.553409",
+    "slack_user": "U08H3PUHUAX",
+    "slack_message_url": "",
+    "slack_event_id": "Ev0B90184XC3",
+    "json_parse_warning": "",
+    "warnings": [],
+    "extracted": {
+      "private_or_sensitive_info_to_hide": [],
+      "media_theme": "",
+      "article_main_message": "",
+      "content_strategy": "",
+      "wordpress_article_angles": "",
+      "note_article_angles": "",
+      "x_threads_post_ideas": ""
+    },
+    "created_at": "",
+    "updated_at": "",
+    "theme": ""
+  },
+  "candidates": [
+    {
+      "title": "Google Sheets連携テスト",
+      "project_key": "google-sheets",
+      "knowledge_type": "notes",
+      "category": "未分類",
+      "status": "saved",
+      "tools": [
+        "ChatGPT",
+        "Codex",
+        "GitHub",
+        "Netlify",
+        "Slack",
+        "Google Sheets"
+      ],
+      "summary": "# Google Sheets連携テスト\n\nSlackから保存したナレッジが、GitHubだけでなくGoogleスプレッドシートにも一覧化されるか確認しています。\n\n目的：\nナレッジ一覧と更新履歴に自動で行が追加されることを確認する。\n\n使用ツール：\nChatGPT, Codex, Slack, GitHub, Net",
+      "theme": "",
+      "path": "knowledge/notes/google-sheets/index.md",
+      "raw_json_path": "knowledge/notes/google-sheets/raw.json",
+      "raw_md_path": "knowledge/notes/google-sheets/raw.md",
+      "raw_txt_path": "knowledge/notes/google-sheets/raw.txt",
+      "raw_path": "knowledge/notes/google-sheets/raw.md",
+      "created": "2026-06-09T09:57:47+09:00",
+      "updated": "2026-06-09T09:57:47+09:00",
+      "score": 16,
+      "similar_reason": "タイトル・本文が近い / カテゴリが近い"
+    },
+    {
+      "title": "Slack確認カード改善テスト 追記",
+      "project_key": "20260609-0758-12345b5e",
+      "knowledge_type": "notes",
+      "category": "未分類",
+      "status": "saved",
+      "tools": [
+        "Slack"
+      ],
+      "summary": "# Slack確認カード改善テスト 追記\n\nさきほど保存したSlack確認カード改善テストに、更新先選択モーダルから追記できるか確認しています。\n\n目的：\n新規保存だけでなく、既存ナレッジに追記できるか確認すること。",
+      "path": "knowledge/notes/20260609-0758-12345b5e/index.md",
+      "raw_json_path": "knowledge/notes/20260609-0758-12345b5e/raw.json",
+      "raw_md_path": "knowledge/notes/20260609-0758-12345b5e/raw-20260609-090322.md",
+      "raw_txt_path": "knowledge/notes/20260609-0758-12345b5e/raw-20260609-090322.txt",
+      "raw_path": "knowledge/notes/20260609-0758-12345b5e/raw-20260609-090322.md",
+      "created": "2026-06-09T07:58:53+09:00",
+      "updated": "2026-06-09T09:03:22+09:00",
+      "score": 5,
+      "similar_reason": "カテゴリが近い / 本文の語句が近い"
+    },
+    {
+      "title": "Slack自動保存テストです。",
+      "project_key": "slack",
+      "knowledge_type": "notes",
+      "category": "未分類",
+      "status": "saved",
+      "tools": [
+        "ChatGPT",
+        "Codex",
+        "GitHub",
+        "Slack"
+      ],
+      "summary": "Slack自動保存テストです。\nChatGPTとCodexを使って、Slack投稿をGitHubにナレッジ保存できるか確認しています。",
+      "path": "knowledge/notes/slack/index.md",
+      "raw_json_path": "knowledge/notes/slack/raw.json",
+      "raw_md_path": "knowledge/notes/slack/raw.md",
+      "raw_txt_path": "knowledge/notes/slack/raw.txt",
+      "raw_path": "knowledge/notes/slack/raw.txt",
+      "created": "2026-06-08T22:15:57+09:00",
+      "updated": "2026-06-08T22:15:57+09:00",
+      "score": 3,
+      "similar_reason": "カテゴリが近い / 本文の語句が近い"
+    }
+  ]
+}
