@@ -1,6 +1,6 @@
 {
   "pending_key": "cleanup-test-C0B8YN010J2-U08H3PUHUAX",
-  "status": "cleanup_test_pending",
+  "status": "cleaned",
   "created_at": "2026-06-09T06:55:56.867Z",
   "channel": "C0B8YN010J2",
   "user": "U08H3PUHUAX",
@@ -126,5 +126,26 @@
         "project_key": "google-sheets"
       }
     ]
+  },
+  "updated_at": "2026-06-09T06:57:07.622Z",
+  "result": {
+    "ok": true,
+    "skipped": false,
+    "message": "Test knowledge sheets cleanup synced.",
+    "url": "https://docs.google.com/spreadsheets/d/1O6wGJWGhnlZXhTveAqeFeJ0myM0q-kUNcHwJloQACaM",
+    "knowledge_sheet": "ナレッジ一覧",
+    "events_sheet": "更新履歴",
+    "event_type": "hard_deleted",
+    "delete_history": true,
+    "project_keys": [
+      "google-sheets",
+      "google-sheets-2",
+      "google-sheets-3",
+      "slack",
+      "20260609-0758-12345b5e",
+      "test-knowledge"
+    ],
+    "knowledge_rows_deleted": 2,
+    "history_rows_deleted": 2
   }
 }
