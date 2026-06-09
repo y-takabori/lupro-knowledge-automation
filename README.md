@@ -767,3 +767,63 @@ Google Sheetsには、既存のURLや分類情報に加えて以下を反映し�
 - `github_index_url`
 
 Slack private file URLやBot Token、本文全文はログや確認カードに出さないでください。GitHubリポジトリはPrivate前提で運用してください。
+
+## Slack添付ファイルの推定ルール
+
+Slackに `.txt` / `.md` / `.json` を添付した場合、Botはファイル本文を主本文として読み取り、Slack本文は補足メモとして扱います。推定優先順位は以下です。
+
+- `title`: JSON内の `title` / `project_title`、YAML frontmatterの `title`、Markdownの最初の `#` 見出し、本文中の `タイトル案:` / `タイトル:`、ファイル名、最後に `無題ナレッジ`
+- `project_key`: JSONまたはfrontmatterの `project_key`、title由来slug、Markdown見出し由来slug、ファイル名由来slug、本文キーワード由来slug、最後に `YYYYMMDD-HHmm-hash`
+- `category`: JSONまたはfrontmatterの `category`、本文中の `カテゴリ:`、本文キーワード推定、最後に `未分類`
+- `summary`: JSONまたはfrontmatterの `summary`、本文中の `概要:`、本文冒頭200〜300字、最後に `概要未設定`
+
+日本語タイトルは無理にローマ字変換しません。既知キーワードを含む場合は意味のある英数字slugへ寄せ、難しい場合だけ日時hashへフォールバックします。日時hashにフォールバックした場合、Slack確認カードに「内容を編集」から修正できる警告を表示します。
+
+Google Sheetsへ書き込む値は、配列・オブジェクトをそのまま渡さず、人間が読める短文に整形します。`summary` が object / array の場合は `summary` / `text` / `value` / `description` / `body` / `implementation_summary` / `article_main_message` / `facts` / `inferences` などを優先して抽出し、`[object Object]` が出ないようにします。
+
+## 出力物の紐づけ管理
+
+保存済みナレッジから生成したnote記事草案、X/Threads投稿案、有料マニュアル、テンプレートREADME、営業メモは、元ナレッジ配下に保存できます。
+
+```text
+knowledge/{knowledge_type}/{project_key}/outputs/note/{timestamp}.md
+knowledge/{knowledge_type}/{project_key}/outputs/x_threads/{timestamp}.md
+knowledge/{knowledge_type}/{project_key}/outputs/paid_manual/{timestamp}.md
+knowledge/{knowledge_type}/{project_key}/outputs/template_readme/{timestamp}.md
+knowledge/{knowledge_type}/{project_key}/outputs/sales/{timestamp}.md
+```
+
+API入口:
+
+```text
+POST /.netlify/functions/save-knowledge-output
+Authorization: Bearer {KNOWLEDGE_SAVE_TOKEN}
+```
+
+リクエスト例:
+
+```json
+{
+  "knowledge_type": "notes",
+  "project_key": "slack-json-save-test",
+  "output_type": "note",
+  "title": "note記事草案",
+  "body": "# note記事草案\n\n...",
+  "created_by": "Codex",
+  "model": "gpt-5",
+  "status": "draft",
+  "note": "Slack保存ナレッジから生成"
+}
+```
+
+`metadata.json` には `outputs`、`latest_output_at`、`output_count` を保存します。Google Sheetsの「ナレッジ一覧」には以下の列を追加し、各媒体の最新URLを確認できるようにします。
+
+- `note_output_url`
+- `x_threads_output_url`
+- `paid_manual_output_url`
+- `template_readme_output_url`
+- `sales_output_url`
+- `latest_output_at`
+- `output_count`
+
+Google Sheetsには「出力履歴」シートも作成します。1アウトプット = 1行で、`output_id`、`project_key`、`knowledge_type`、`source_title`、`output_type`、`output_title`、`output_url`、`created_at`、`created_by`、`model`、`status`、`note` を記録します。

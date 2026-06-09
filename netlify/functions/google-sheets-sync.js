@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import { env, formatValue, parseTools } from "./knowledge-archive-core.js";
+import { env, formatValue, outputSummary, parseTools } from "./knowledge-archive-core.js";
 
 const knowledgeHeaders = [
   "project_key",
@@ -28,7 +28,14 @@ const knowledgeHeaders = [
   "file_size",
   "char_count",
   "has_attachment",
-  "has_supplemental_text"
+  "has_supplemental_text",
+  "note_output_url",
+  "x_threads_output_url",
+  "paid_manual_output_url",
+  "template_readme_output_url",
+  "sales_output_url",
+  "latest_output_at",
+  "output_count"
 ];
 
 const eventHeaders = [
@@ -58,6 +65,21 @@ const eventHeaders = [
   "has_supplemental_text"
 ];
 
+const outputHistoryHeaders = [
+  "output_id",
+  "project_key",
+  "knowledge_type",
+  "source_title",
+  "output_type",
+  "output_title",
+  "output_url",
+  "created_at",
+  "created_by",
+  "model",
+  "status",
+  "note"
+];
+
 const sheetFormatState = new Set();
 const testCleanupProjectKeys = new Set([
   "google-sheets",
@@ -82,6 +104,7 @@ function getSheetsConfig() {
   const spreadsheetId = env("GOOGLE_SHEETS_SPREADSHEET_ID");
   const knowledgeSheetName = env("GOOGLE_SHEETS_KNOWLEDGE_SHEET_NAME") || env("GOOGLE_SHEETS_WORKSHEET_NAME") || "\u30ca\u30ec\u30c3\u30b8\u4e00\u89a7";
   const eventsSheetName = env("GOOGLE_SHEETS_EVENTS_SHEET_NAME") || "\u66f4\u65b0\u5c65\u6b74";
+  const outputHistorySheetName = env("GOOGLE_SHEETS_OUTPUTS_SHEET_NAME") || "\u51fa\u529b\u5c65\u6b74";
   if (!email || !privateKey || !spreadsheetId) {
     return {
       enabled: false,
@@ -92,7 +115,7 @@ function getSheetsConfig() {
       ].filter(Boolean)
     };
   }
-  return { enabled: true, email, privateKey, spreadsheetId, knowledgeSheetName, eventsSheetName };
+  return { enabled: true, email, privateKey, spreadsheetId, knowledgeSheetName, eventsSheetName, outputHistorySheetName };
 }
 
 async function getAccessToken(config) {
@@ -291,7 +314,20 @@ function formattingRequests(sheetId, headers, kind) {
     file_size: 110,
     char_count: 110,
     has_attachment: 120,
-    has_supplemental_text: 150
+    has_supplemental_text: 150,
+    output_id: 160,
+    output_type: 130,
+    output_title: 240,
+    source_title: 220,
+    note_output_url: 150,
+    x_threads_output_url: 150,
+    paid_manual_output_url: 150,
+    template_readme_output_url: 150,
+    sales_output_url: 150,
+    latest_output_at: 150,
+    output_count: 90,
+    created_by: 120,
+    model: 120
   };
 
   const requests = [
@@ -462,8 +498,13 @@ function colName(index) {
   return value;
 }
 
-function sheetValue(value) {
-  return Array.isArray(value) ? value.join(", ") : formatValue(value);
+function sheetValue(value, maxLength = 300) {
+  const formatted = formatValue(value)
+    .replace(/\r?\n+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!formatted) return "";
+  return formatted.length > maxLength ? `${formatted.slice(0, maxLength - 1)}…` : formatted;
 }
 
 function sensitiveInfo(payload) {
@@ -484,17 +525,31 @@ function rawUrl(result) {
   return result.raw_url || result.raw_json_url || result.raw_md_url || result.raw_txt_url || "";
 }
 
+function githubBlobUrl(path) {
+  if (!path) return "";
+  const owner = env("GITHUB_OWNER");
+  const repo = env("GITHUB_REPO");
+  const branch = env("GITHUB_BRANCH") || "main";
+  if (!owner || !repo) return "";
+  return `https://github.com/${owner}/${repo}/blob/${branch}/${path}`;
+}
+
+function resultOutputSummary(payload, result) {
+  return result.output_summary || outputSummary(result.metadata?.outputs || payload.outputs || payload.metadata?.outputs || {});
+}
+
 function buildKnowledgeRow(payload, result, options = {}) {
   const createdAt = options.createdAt || result.created || result.updated || "";
   const updatedAt = result.updated || "";
+  const outputs = resultOutputSummary(payload, result);
   return [
     result.project_key || payload.project_key || "",
-    result.title || payload.title || "",
+    sheetValue(result.title || payload.title || "", 160),
     result.knowledge_type || payload.knowledge_type || "",
-    payload.category || "",
-    payload.status || "",
-    payload.summary || "",
-    parseTools(payload.tools).join(", "),
+    sheetValue(payload.category || "", 120),
+    sheetValue(payload.status || "", 80),
+    sheetValue(payload.summary || "", 300),
+    sheetValue(parseTools(payload.tools).join(", "), 180),
     createdAt,
     updatedAt,
     String(options.updateCount ?? 0),
@@ -514,7 +569,14 @@ function buildKnowledgeRow(payload, result, options = {}) {
     payload.file_size ? String(payload.file_size) : "",
     payload.char_count ? String(payload.char_count) : "",
     payload.has_attachment ? "yes" : "no",
-    payload.has_supplemental_text || payload.supplemental_text ? "yes" : "no"
+    payload.has_supplemental_text || payload.supplemental_text ? "yes" : "no",
+    outputs.note_output_url || "",
+    outputs.x_threads_output_url || "",
+    outputs.paid_manual_output_url || "",
+    outputs.template_readme_output_url || "",
+    outputs.sales_output_url || "",
+    outputs.latest_output_at || "",
+    outputs.output_count ? String(outputs.output_count) : ""
   ];
 }
 
@@ -525,9 +587,9 @@ function buildEventRow(payload, result, options = {}) {
     options.eventType || eventType(payload, result),
     result.save_mode || payload.save_mode || "",
     result.project_key || payload.project_key || "",
-    result.title || payload.title || "",
+    sheetValue(result.title || payload.title || "", 160),
     result.knowledge_type || payload.knowledge_type || "",
-    payload.category || "",
+    sheetValue(payload.category || "", 120),
     payload.input_type || "",
     payload.slack_user || "",
     result.index_url || "",
@@ -544,6 +606,24 @@ function buildEventRow(payload, result, options = {}) {
     payload.char_count ? String(payload.char_count) : "",
     payload.has_attachment ? "yes" : "no",
     payload.has_supplemental_text || payload.supplemental_text ? "yes" : "no"
+  ];
+}
+
+function buildOutputHistoryRow(metadata, result) {
+  const record = result.output_record || {};
+  return [
+    `${result.project_key}-${result.output_type}-${result.created_at || Date.now()}`,
+    result.project_key || metadata.project_key || "",
+    result.knowledge_type || metadata.knowledge_type || "",
+    sheetValue(metadata.title || result.title || "", 160),
+    result.output_type || record.output_type || "",
+    sheetValue(result.output_title || record.title || "", 180),
+    result.output_url || record.url || "",
+    result.created_at || record.created_at || "",
+    sheetValue(record.created_by || "", 120),
+    sheetValue(record.model || "", 120),
+    sheetValue(record.status || "draft", 80),
+    sheetValue(record.note || "", 260)
   ];
 }
 
@@ -648,7 +728,14 @@ function rowToKnowledgeEntry(row) {
     file_size: row[23] || "",
     char_count: row[24] || "",
     has_attachment: row[25] || "",
-    has_supplemental_text: row[26] || ""
+    has_supplemental_text: row[26] || "",
+    note_output_url: row[27] || "",
+    x_threads_output_url: row[28] || "",
+    paid_manual_output_url: row[29] || "",
+    template_readme_output_url: row[30] || "",
+    sales_output_url: row[31] || "",
+    latest_output_at: row[32] || "",
+    output_count: row[33] || ""
   };
 }
 
@@ -666,9 +753,11 @@ async function getConfiguredSheets() {
   const token = await getAccessToken(config);
   const knowledgeSheetProperties = await ensureHeaders(config, token, config.knowledgeSheetName, knowledgeHeaders);
   const eventsSheetProperties = await ensureHeaders(config, token, config.eventsSheetName, eventHeaders);
+  const outputHistorySheetProperties = await ensureHeaders(config, token, config.outputHistorySheetName, outputHistoryHeaders);
   await applySheetFormatting(config, token, config.knowledgeSheetName, knowledgeHeaders, "knowledge", knowledgeSheetProperties);
   await applySheetFormatting(config, token, config.eventsSheetName, eventHeaders, "events", eventsSheetProperties);
-  return { config, token, knowledgeSheetProperties, eventsSheetProperties };
+  await applySheetFormatting(config, token, config.outputHistorySheetName, outputHistoryHeaders, "outputs", outputHistorySheetProperties);
+  return { config, token, knowledgeSheetProperties, eventsSheetProperties, outputHistorySheetProperties };
 }
 
 export async function syncKnowledgeToGoogleSheets(payload, result) {
@@ -684,8 +773,10 @@ export async function syncKnowledgeToGoogleSheets(payload, result) {
   const token = await getAccessToken(config);
   const knowledgeSheetProperties = await ensureHeaders(config, token, config.knowledgeSheetName, knowledgeHeaders);
   const eventsSheetProperties = await ensureHeaders(config, token, config.eventsSheetName, eventHeaders);
+  const outputHistorySheetProperties = await ensureHeaders(config, token, config.outputHistorySheetName, outputHistoryHeaders);
   await applySheetFormatting(config, token, config.knowledgeSheetName, knowledgeHeaders, "knowledge", knowledgeSheetProperties);
   await applySheetFormatting(config, token, config.eventsSheetName, eventHeaders, "events", eventsSheetProperties);
+  await applySheetFormatting(config, token, config.outputHistorySheetName, outputHistoryHeaders, "outputs", outputHistorySheetProperties);
 
   const rows = await readRows(config, token, config.knowledgeSheetName, knowledgeHeaders);
   const key = result.project_key || payload.project_key;
@@ -729,8 +820,70 @@ export async function syncKnowledgeToGoogleSheets(payload, result) {
     url: `https://docs.google.com/spreadsheets/d/${config.spreadsheetId}`,
     knowledge_sheet: config.knowledgeSheetName,
     events_sheet: config.eventsSheetName,
+    output_history_sheet: config.outputHistorySheetName,
     event_type: type,
     note
+  };
+}
+
+export async function syncKnowledgeOutputToGoogleSheets(metadata, result) {
+  const sheets = await getConfiguredSheets();
+  if (sheets.skipped) return sheets.skipped;
+  const { config, token } = sheets;
+  const rows = await readRows(config, token, config.knowledgeSheetName, knowledgeHeaders);
+  const key = result.project_key || metadata.project_key;
+  const existingIndex = rows.findIndex((row) => row[0] === key);
+  const payload = {
+    ...metadata,
+    summary: metadata.summary || "",
+    tools: metadata.tools || [],
+    source: metadata.source || "output",
+    input_type: metadata.input_type || "",
+    outputs: metadata.outputs || {}
+  };
+  const knowledgeResult = {
+    ...result,
+    title: metadata.title || result.title || key,
+    knowledge_type: metadata.knowledge_type || result.knowledge_type || "",
+    project_key: key,
+    updated: result.created_at || metadata.updated || "",
+    created: metadata.created || metadata.created_at || "",
+    index_url: result.index_url || "",
+    raw_url: metadata.raw_url || "",
+    metadata_url: result.metadata_url || "",
+    output_summary: result.output_summary || outputSummary(metadata.outputs || {})
+  };
+  if (existingIndex >= 0) {
+    const current = rows[existingIndex];
+    knowledgeResult.index_url ||= current[11] || "";
+    knowledgeResult.raw_url ||= current[12] || "";
+    knowledgeResult.metadata_url ||= current[13] || "";
+    const row = buildKnowledgeRow(payload, knowledgeResult, {
+      createdAt: current[7] || knowledgeResult.created || knowledgeResult.updated || "",
+      updateCount: Number.parseInt(current[9] || "0", 10) || 0,
+      lastEventType: current[10] || "output_created",
+      lastUpdateUrl: current[14] || ""
+    });
+    await putRow(config, token, config.knowledgeSheetName, existingIndex + 2, knowledgeHeaders, row);
+  } else {
+    knowledgeResult.index_url ||= githubBlobUrl(metadata.path);
+    knowledgeResult.raw_url ||= githubBlobUrl(metadata.raw_path);
+    knowledgeResult.metadata_url ||= githubBlobUrl(`${metadata.path || ""}`.replace(/index\.md$/, "metadata.json"));
+    await appendRow(config, token, config.knowledgeSheetName, knowledgeHeaders, buildKnowledgeRow(payload, knowledgeResult, {
+      createdAt: knowledgeResult.created || knowledgeResult.updated || "",
+      updateCount: 0,
+      lastEventType: "output_created",
+      lastUpdateUrl: ""
+    }));
+  }
+  await appendRow(config, token, config.outputHistorySheetName, outputHistoryHeaders, buildOutputHistoryRow(metadata, result));
+  return {
+    ok: true,
+    skipped: false,
+    message: "Output synced to Sheets.",
+    url: `https://docs.google.com/spreadsheets/d/${config.spreadsheetId}`,
+    knowledge_sheet: config.knowledgeSheetName,
+    output_history_sheet: config.outputHistorySheetName
   };
 }
 

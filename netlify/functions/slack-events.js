@@ -386,6 +386,25 @@ function confirmationBlocks(pending) {
     {
       type: "section",
       text: mrkdwn([
+        "*推定内容*",
+        `入力方法: ${payload.has_attachment ? "Slackファイル添付" : "Slack本文"}`,
+        payload.file_name ? `ファイル名: ${payload.file_name}` : "",
+        `推定タイトル: ${payload.title || "無題ナレッジ"}`,
+        `推定project_key: ${payload.project_key || ""}`,
+        `保存キー生成元: ${payload.project_key_source || "不明"}`,
+        payload.project_key_source === "fallback_hash"
+          ? "保存キーを本文からうまく推定できなかったため、自動キーを使っています。必要に応じて「内容を編集」から修正してください。"
+          : "",
+        `推定カテゴリ: ${payload.category || "未分類"}`,
+        `推定概要: ${String(payload.summary || "概要未設定").slice(0, 300)}`,
+        `推定入力タイプ: ${inputLabels[payload.input_type] || payload.input_type}`,
+        `文字数: ${Number(payload.char_count || String(payload.body || "").length).toLocaleString("ja-JP")}文字`,
+        `公開時に注意が必要そうな情報: ${warningsText(payload.warnings)}`
+      ].filter(Boolean).join("\n"))
+    },
+    {
+      type: "section",
+      text: mrkdwn([
         "*ナレッジ候補を読み取りました。まだ保存していません。*",
         "",
         `*推定タイトル:*\n${payload.title}`,
@@ -1318,7 +1337,7 @@ function inputBlock(blockId, label, initialValue = "", multiline = false) {
   };
 }
 
-async function openEditModal(triggerId, pending) {
+async function openEditModalLegacy(triggerId, pending) {
   const payload = pending.payload;
   await slackApi("views.open", {
     trigger_id: triggerId,
@@ -1337,6 +1356,33 @@ async function openEditModal(triggerId, pending) {
         inputBlock("status", "ステータス", payload.status),
         inputBlock("tools", "使用ツール", parseTools(payload.tools).join(", ")),
         inputBlock("summary", "概要", payload.summary, true),
+        inputBlock("save_mode", "保存モード new / update / upsert", payload.save_mode || "upsert"),
+        inputBlock("target_project_key", "更新対象 project_key", payload.project_key)
+      ]
+    }
+  });
+}
+
+async function openEditModal(triggerId, pending) {
+  const payload = pending.payload;
+  await slackApi("views.open", {
+    trigger_id: triggerId,
+    view: {
+      type: "modal",
+      callback_id: "knowledge_edit_submit",
+      private_metadata: pending.pending_key,
+      title: slackText("保存内容を編集"),
+      submit: slackText("保存する"),
+      close: slackText("キャンセル"),
+      blocks: [
+        inputBlock("title", "タイトル", payload.title),
+        inputBlock("project_key", "保存キー project_key", payload.project_key),
+        inputBlock("knowledge_type", "ナレッジ種別", payload.knowledge_type),
+        inputBlock("category", "カテゴリ", payload.category),
+        inputBlock("status", "ステータス", payload.status),
+        inputBlock("tools", "使用ツール", parseTools(payload.tools).join(", ")),
+        inputBlock("summary", "概要", payload.summary, true),
+        inputBlock("private_or_sensitive_info_to_hide", "公開時に伏せる情報", Array.isArray(payload.extracted?.private_or_sensitive_info_to_hide) ? payload.extracted.private_or_sensitive_info_to_hide.join(", ") : payload.extracted?.private_or_sensitive_info_to_hide || "", true),
         inputBlock("save_mode", "保存モード new / update / upsert", payload.save_mode || "upsert"),
         inputBlock("target_project_key", "更新対象 project_key", payload.project_key)
       ]
@@ -1519,7 +1565,11 @@ async function handleViewSubmission(payload) {
       status: viewValue(payload.view.state, "status"),
       tools: viewValue(payload.view.state, "tools"),
       summary: viewValue(payload.view.state, "summary"),
-      save_mode: viewValue(payload.view.state, "save_mode") || "upsert"
+      save_mode: viewValue(payload.view.state, "save_mode") || "upsert",
+      extracted: {
+        ...(pending.payload.extracted || {}),
+        private_or_sensitive_info_to_hide: viewValue(payload.view.state, "private_or_sensitive_info_to_hide")
+      }
     };
   }
 

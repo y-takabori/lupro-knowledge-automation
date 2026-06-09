@@ -239,6 +239,171 @@ function firstNonEmpty(...values) {
   return "";
 }
 
+function compactText(value, maxLength = 300) {
+  const formatted = formatValue(value)
+    .replace(/\r?\n+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!formatted) return "";
+  return formatted.length > maxLength ? `${formatted.slice(0, maxLength - 1)}…` : formatted;
+}
+
+function humanText(value, fallback = "") {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return compactText(value) || fallback;
+  }
+  if (Array.isArray(value)) {
+    return compactText(value.map((item) => humanText(item)).filter(Boolean).join(", "), 300) || fallback;
+  }
+  if (isPlainObject(value)) {
+    const preferredKeys = [
+      "summary",
+      "text",
+      "value",
+      "name",
+      "description",
+      "body",
+      "implementation_summary",
+      "article_main_message",
+      "facts",
+      "inferences"
+    ];
+    for (const key of preferredKeys) {
+      const extracted = humanText(value[key]);
+      if (extracted) return extracted;
+    }
+    return compactText(value, 300) || fallback;
+  }
+  return compactText(value) || fallback;
+}
+
+function extractYamlFrontmatter(text) {
+  const match = String(text || "").match(/^---\s*\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  if (!match) return {};
+  const frontmatter = {};
+  for (const line of match[1].split(/\r?\n/)) {
+    const item = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.+?)\s*$/);
+    if (!item) continue;
+    frontmatter[item[1]] = item[2].replace(/^["']|["']$/g, "").trim();
+  }
+  return frontmatter;
+}
+
+function extractLabeledValue(text, labels) {
+  const escaped = labels.map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const pattern = new RegExp(`^(?:${escaped})\\s*[:：]\\s*(.+)$`, "im");
+  const match = String(text || "").match(pattern);
+  return match?.[1]?.trim() || "";
+}
+
+function filenameTitle(fileName) {
+  return String(fileName || "")
+    .replace(/\.[A-Za-z0-9]+$/, "")
+    .replace(/[_-]+/g, " ")
+    .trim();
+}
+
+function keywordSlugTokens(text) {
+  const source = String(text || "").toLowerCase();
+  const dictionary = [
+    [/lupro/i, "lupro"],
+    [/slack/i, "slack"],
+    [/github/i, "github"],
+    [/google\s*sheets?|スプレッドシート|シート/i, "sheets"],
+    [/json/i, "json"],
+    [/markdown|\.md\b/i, "markdown"],
+    [/note/i, "note"],
+    [/wordpress/i, "wordpress"],
+    [/\bx\b|twitter/i, "x"],
+    [/threads/i, "threads"],
+    [/保存|save/i, "save"],
+    [/テスト|test/i, "test"],
+    [/長文|long/i, "long"],
+    [/添付|ファイル|file/i, "file"],
+    [/ナレッジ|knowledge/i, "knowledge"],
+    [/業務効率化|効率化|automation/i, "automation"],
+    [/管理|management/i, "management"],
+    [/改善|改善案|improve|improvement/i, "improvement"],
+    [/記事|content|article/i, "content"],
+    [/有料|paid/i, "paid"],
+    [/マニュアル|manual/i, "manual"],
+    [/営業|sales/i, "sales"],
+    [/テンプレート|template/i, "template"]
+  ];
+  const tokens = [];
+  for (const [pattern, token] of dictionary) {
+    if (pattern.test(source) && !tokens.includes(token)) tokens.push(token);
+  }
+  return tokens;
+}
+
+function slugFromKnownTokens(...values) {
+  const tokens = keywordSlugTokens(values.filter(Boolean).join(" "));
+  if (tokens.length >= 2) return tokens.slice(0, 5).join("-");
+  return "";
+}
+
+function slugifyMeaningful(value, fallbackSource = "") {
+  const ascii = String(value || "")
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 70);
+  if (ascii && !genericProjectKey(ascii)) return ascii;
+  const tokenSlug = slugFromKnownTokens(value, fallbackSource);
+  if (tokenSlug && !genericProjectKey(tokenSlug)) return tokenSlug;
+  return "";
+}
+
+function inferCategory(text) {
+  const source = String(text || "");
+  if (/営業|sales/i.test(source)) return "営業";
+  if (/マーケ|marketing|広告|施策/i.test(source)) return "マーケティング";
+  if (/WordPress|note|Threads|コンテンツ|記事|発信/i.test(source)) return "コンテンツ";
+  if (/Slack|GitHub|Netlify|Google Sheets|スプレッドシート|自動化|AI/i.test(source)) return "AI業務効率化";
+  if (/顧客|提案|client/i.test(source)) return "顧客提案";
+  return "未分類";
+}
+
+function inferCategoryFromText(text) {
+  const source = String(text || "");
+  const categories = [];
+  if (/Slack|GitHub|Netlify|Google Sheets|スプレッドシート|自動化|AI|業務効率化/i.test(source)) {
+    categories.push("AI業務効率化");
+  }
+  if (/ナレッジ|knowledge|保存|管理|index\.json|Markdown|JSON/i.test(source)) {
+    categories.push("ナレッジ管理");
+  }
+  if (/WordPress|note|Threads|X\/Threads|コンテンツ|記事|発信/i.test(source)) {
+    categories.push("発信戦略");
+  }
+  if (/営業|sales/i.test(source)) categories.push("営業");
+  if (/マーケ|marketing|広告|施策/i.test(source)) categories.push("マーケティング");
+  if (/顧客|提案|client/i.test(source)) categories.push("顧客提案");
+  return categories.length ? [...new Set(categories)].slice(0, 3).join(" / ") : "未分類";
+}
+
+function inferProjectKey({ parsed, frontmatter, title, heading, fileName, body }) {
+  const explicit = firstNonEmpty(parsed.project_key, frontmatter.project_key);
+  if (explicit) {
+    return {
+      projectKey: String(explicit).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, ""),
+      source: parsed.project_key ? "json.project_key" : "frontmatter.project_key"
+    };
+  }
+  const titleSlug = slugifyMeaningful(title);
+  if (titleSlug) return { projectKey: titleSlug, source: "title_slug" };
+  const headingSlug = slugifyMeaningful(heading);
+  if (headingSlug) return { projectKey: headingSlug, source: "markdown_heading_slug" };
+  const fileSlug = slugifyMeaningful(filenameTitle(fileName));
+  if (fileSlug) return { projectKey: fileSlug, source: "file_name_slug" };
+  const keywordSlug = slugFromKnownTokens(title, heading, fileName, body);
+  if (keywordSlug && !genericProjectKey(keywordSlug)) return { projectKey: keywordSlug, source: "keyword_slug" };
+  return { projectKey: slugifyTitle("", `${title}:${fileName}:${body}`), source: "fallback_hash" };
+}
+
 export function extractKnownTools(text, explicitTools = "") {
   const tools = new Set(parseTools(explicitTools));
   const candidates = [
@@ -273,7 +438,7 @@ export function detectSensitiveWarnings(text) {
   return warnings;
 }
 
-export function buildAutoKnowledgePayload({ text, fileName = "", supplementalText = "", source = "slack_event", slack = {} }) {
+function buildAutoKnowledgePayloadLegacy({ text, fileName = "", supplementalText = "", source = "slack_event", slack = {} }) {
   const body = String(text || "").trim();
   const supplemental = String(supplementalText || "").trim();
   const inputType = detectInputType(body, fileName);
@@ -369,6 +534,108 @@ export function buildAutoKnowledgePayload({ text, fileName = "", supplementalTex
   };
 }
 
+export function buildAutoKnowledgePayload({ text, fileName = "", supplementalText = "", source = "slack_event", slack = {} }) {
+  const body = String(text || "").trim();
+  const supplemental = String(supplementalText || "").trim();
+  const inputType = detectInputType(body, fileName);
+  const jsonResult = inputType === "json" ? parseFlexibleJson(body) : null;
+  const parsed = jsonResult?.valid && isPlainObject(jsonResult.parsed) ? jsonResult.parsed : {};
+  const frontmatter = extractYamlFrontmatter(body);
+  const heading = body.match(/^#{1,6}\s+(.+)$/m)?.[1]?.trim() || "";
+  const labeledTitle = extractLabeledValue(body, ["タイトル案", "タイトル", "title"]);
+  const labeledCategory = extractLabeledValue(body, ["カテゴリ", "category"]);
+  const labeledSummary = extractLabeledValue(body, ["概要", "summary"]);
+  const firstParagraph = body
+    .replace(/^---[\s\S]*?---/, "")
+    .split(/\r?\n\s*\r?\n/)
+    .map((item) => item.split(/\r?\n/).filter((line) => !/^#{1,6}\s+/.test(line.trim())).join("\n"))
+    .map((item) => item.replace(/^[-*\s]+/, "").trim())
+    .find(Boolean) || "";
+
+  const title = humanText(firstNonEmpty(
+    parsed.title,
+    parsed.project_title,
+    frontmatter.title,
+    heading,
+    labeledTitle,
+    filenameTitle(fileName),
+    "無題ナレッジ"
+  ), "無題ナレッジ");
+  const category = humanText(firstNonEmpty(
+    parsed.category,
+    parsed.project_category,
+    frontmatter.category,
+    labeledCategory,
+    inferCategoryFromText(`${title}\n${body}`)
+  ), "未分類");
+  const rawStatus = humanText(firstNonEmpty(parsed.status, frontmatter.status, "saved"), "saved");
+  const status = statuses.has(rawStatus) ? rawStatus : "saved";
+  const summary = humanText(firstNonEmpty(
+    parsed.summary,
+    parsed.implementation_summary,
+    parsed.article_main_message,
+    frontmatter.summary,
+    labeledSummary,
+    firstParagraph ? firstParagraph.slice(0, 280) : ""
+  ), "概要未設定");
+  const rawKnowledgeType = String(firstNonEmpty(parsed.knowledge_type, parsed.type, frontmatter.knowledge_type, "notes"));
+  const knowledgeType = knowledgeTypeFolders[rawKnowledgeType] ? rawKnowledgeType : "notes";
+  const { projectKey, source: projectKeySource } = inferProjectKey({ parsed, frontmatter, title, heading, fileName, body });
+  const tools = extractKnownTools(body, parsed.tools_used || parsed.tools || frontmatter.tools || "");
+  const warnings = detectSensitiveWarnings(`${body}\n${supplemental}`);
+  const hasAttachment = Boolean(slack.file_name || fileName);
+  const sourceType = slack.source_type || (
+    hasAttachment && supplemental ? "slack_text_and_file" :
+      hasAttachment ? "slack_file" :
+        source === "web" ? "web_paste" : "slack_text"
+  );
+  const jsonParseWarning = inputType === "json" && jsonResult && !jsonResult.valid
+    ? "JSONとしては解析できませんでしたが、テキストとして保存できます。"
+    : "";
+
+  return {
+    title,
+    knowledge_type: knowledgeType,
+    project_key: projectKey,
+    project_key_source: projectKeySource,
+    category,
+    status,
+    tools,
+    summary,
+    input_type: inputType,
+    body,
+    supplemental_text: supplemental,
+    save_mode: "upsert",
+    source,
+    source_type: sourceType,
+    file_name: slack.file_name || fileName || "",
+    file_size: Number(slack.file_size || 0) || 0,
+    char_count: body.length,
+    has_attachment: hasAttachment,
+    has_supplemental_text: Boolean(supplemental),
+    parsed_json_available: Boolean(jsonResult?.valid),
+    slack_channel: slack.channel || "",
+    slack_ts: slack.ts || "",
+    slack_user: slack.user || "",
+    slack_message_url: slack.message_url || "",
+    slack_event_id: slack.event_id || "",
+    json_parse_warning: jsonParseWarning,
+    warnings,
+    extracted: {
+      private_or_sensitive_info_to_hide: parsed.private_or_sensitive_info_to_hide || warnings,
+      media_theme: parsed.media_theme || parsed.theme || "",
+      article_main_message: humanText(parsed.article_main_message),
+      content_strategy: humanText(parsed.content_strategy),
+      wordpress_article_angles: parsed.wordpress_article_angles || "",
+      note_article_angles: parsed.note_article_angles || "",
+      x_threads_post_ideas: parsed.x_threads_post_ideas || ""
+    },
+    created_at: humanText(parsed.created_at || frontmatter.created_at),
+    updated_at: humanText(parsed.updated_at || frontmatter.updated_at),
+    theme: humanText(parsed.media_theme || parsed.theme || frontmatter.theme)
+  };
+}
+
 function yamlQuote(value) {
   return JSON.stringify(String(value || ""));
 }
@@ -391,13 +658,13 @@ function normalizeJsonPayload(parsedJson, payload) {
 
 export function normalizeKnowledgePayload(input) {
   const payload = {
-    title: String(input.title || "").trim(),
+    title: humanText(input.title).trim(),
     knowledge_type: String(input.knowledge_type || "other").trim(),
     project_key: String(input.project_key || "").trim(),
-    category: String(input.category || "").trim(),
+    category: humanText(input.category).trim(),
     status: String(input.status || "draft").trim(),
     tools: parseTools(input.tools),
-    summary: String(input.summary || "").trim(),
+    summary: humanText(input.summary).trim(),
     input_type: String(input.input_type || "plain_text").trim(),
     body: String(input.body ?? input.body_short ?? "").trim(),
     supplemental_text: String(input.supplemental_text || "").trim(),
@@ -652,6 +919,8 @@ function buildMetadata(payload, created, updated, paths, existingMetadata = null
     ...(Array.isArray(payload.warnings) ? payload.warnings : []),
     payload.json_parse_warning || ""
   ].filter(Boolean);
+  const outputs = normalizeOutputs(existingMetadata?.outputs);
+  const outputsSummary = outputSummary(outputs);
   return {
     title: payload.title,
     project_key: payload.project_key,
@@ -686,11 +955,15 @@ function buildMetadata(payload, created, updated, paths, existingMetadata = null
     slack_message_url: payload.slack_message_url || existingMetadata?.slack_message_url || "",
     supplemental_text: payload.supplemental_text || existingMetadata?.supplemental_text || "",
     warnings: warnings.length ? warnings : existingMetadata?.warnings || [],
-    extracted: payload.extracted || existingMetadata?.extracted || {}
+    extracted: payload.extracted || existingMetadata?.extracted || {},
+    outputs,
+    latest_output_at: outputsSummary.latest_output_at,
+    output_count: outputsSummary.output_count
   };
 }
 
 function indexEntry(metadata) {
+  const outputsSummary = outputSummary(metadata.outputs);
   return {
     title: metadata.title,
     project_key: metadata.project_key,
@@ -712,12 +985,19 @@ function indexEntry(metadata) {
     char_count: metadata.char_count,
     has_attachment: metadata.has_attachment,
     has_supplemental_text: metadata.has_supplemental_text,
+    note_output_url: outputsSummary.note_output_url,
+    x_threads_output_url: outputsSummary.x_threads_output_url,
+    paid_manual_output_url: outputsSummary.paid_manual_output_url,
+    template_readme_output_url: outputsSummary.template_readme_output_url,
+    sales_output_url: outputsSummary.sales_output_url,
+    latest_output_at: outputsSummary.latest_output_at,
+    output_count: outputsSummary.output_count,
     created: metadata.created,
     updated: metadata.updated
   };
 }
 
-async function updateGlobalIndex(client, metadata) {
+export async function updateGlobalIndex(client, metadata) {
   const indexPath = "knowledge/index.json";
   const current = await client.getFile(indexPath);
   let entries = [];
@@ -783,6 +1063,47 @@ function deletionMetadata(entry, metadata, deletedAt, source, deletedPaths) {
     deleted_source: source,
     deleted_paths: deletedPaths
   };
+}
+
+export const outputTypes = new Set(["note", "x_threads", "paid_manual", "template_readme", "sales"]);
+
+export function emptyOutputs() {
+  return {
+    note: [],
+    x_threads: [],
+    paid_manual: [],
+    template_readme: [],
+    sales: []
+  };
+}
+
+export function normalizeOutputs(value) {
+  const base = emptyOutputs();
+  if (!isPlainObject(value)) return base;
+  for (const key of Object.keys(base)) {
+    base[key] = Array.isArray(value[key]) ? value[key] : [];
+  }
+  return base;
+}
+
+export function outputSummary(outputsValue) {
+  const outputs = normalizeOutputs(outputsValue);
+  const summary = {
+    note_output_url: "",
+    x_threads_output_url: "",
+    paid_manual_output_url: "",
+    template_readme_output_url: "",
+    sales_output_url: "",
+    latest_output_at: "",
+    output_count: 0
+  };
+  for (const [type, records] of Object.entries(outputs)) {
+    summary.output_count += records.length;
+    const latest = [...records].sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")))[0];
+    if (latest?.url) summary[`${type}_output_url`] = latest.url;
+    if (latest?.created_at && latest.created_at > summary.latest_output_at) summary.latest_output_at = latest.created_at;
+  }
+  return summary;
 }
 
 export async function deleteKnowledgeFromGitHub(input) {
@@ -1035,6 +1356,104 @@ export async function saveKnowledgeToGitHub(input) {
     update_txt_url: isUpdate && payload.input_type === "plain_text" ? `${htmlBase}/${updateTxtPath}` : "",
     is_update: isUpdate,
     json_parse_warning: payload.json_parse_warning || ""
+  };
+}
+
+export async function saveKnowledgeOutputToGitHub(input) {
+  const knowledgeType = String(input.knowledge_type || "").trim();
+  const projectKey = String(input.project_key || "").trim();
+  const outputType = String(input.output_type || "").trim();
+  if (!knowledgeTypeFolders[knowledgeType]) {
+    const error = new Error("knowledge_type is invalid.");
+    error.status = 400;
+    throw error;
+  }
+  if (!/^[a-zA-Z0-9-]+$/.test(projectKey)) {
+    const error = new Error("project_key must contain only half-width letters, numbers, and hyphens.");
+    error.status = 400;
+    throw error;
+  }
+  if (!outputTypes.has(outputType)) {
+    const error = new Error("output_type is invalid.");
+    error.status = 400;
+    throw error;
+  }
+  const body = String(input.body || "").trim();
+  if (!body) {
+    const error = new Error("body is required.");
+    error.status = 400;
+    throw error;
+  }
+
+  const client = new GitHubContentsClient(requireGitHubConfig());
+  const folder = knowledgeTypeFolders[knowledgeType];
+  const basePath = `knowledge/${folder}/${projectKey}`;
+  const metadataPath = `${basePath}/metadata.json`;
+  const metadataFile = await client.getFile(metadataPath);
+  if (!metadataFile?.content) {
+    const error = new Error("Source knowledge metadata was not found.");
+    error.status = 404;
+    throw error;
+  }
+  let metadata;
+  try {
+    metadata = JSON.parse(metadataFile.content);
+  } catch {
+    const error = new Error("Source knowledge metadata is invalid JSON.");
+    error.status = 500;
+    throw error;
+  }
+
+  const createdAt = nowJst();
+  const stamp = updateTimestampForPath(createdAt);
+  const outputPath = `${basePath}/outputs/${outputType}/${stamp}.md`;
+  const htmlBase = `https://github.com/${env("GITHUB_OWNER")}/${env("GITHUB_REPO")}/blob/${env("GITHUB_BRANCH") || "main"}`;
+  const outputUrl = `${htmlBase}/${outputPath}`;
+  const outputTitle = humanText(input.title, `${outputType} output`);
+  const outputMarkdown = `---\ntitle: ${yamlQuote(outputTitle)}\noutput_type: ${yamlQuote(outputType)}\nsource_project_key: ${yamlQuote(projectKey)}\nknowledge_type: ${yamlQuote(knowledgeType)}\nstatus: ${yamlQuote(input.status || "draft")}\ncreated_at: ${yamlQuote(createdAt)}\ncreated_by: ${yamlQuote(input.created_by || "")}\nmodel: ${yamlQuote(input.model || "")}\n---\n\n# ${outputTitle}\n\n${body}\n`;
+  await client.putFile(outputPath, outputMarkdown, `Save ${outputType} output for ${projectKey}`);
+
+  const outputs = normalizeOutputs(metadata.outputs);
+  const outputRecord = {
+    title: outputTitle,
+    url: outputUrl,
+    path: outputPath,
+    created_at: createdAt,
+    output_type: outputType,
+    created_by: String(input.created_by || ""),
+    model: String(input.model || ""),
+    status: String(input.status || "draft"),
+    note: humanText(input.note)
+  };
+  outputs[outputType].push(outputRecord);
+  const outputsSummary = outputSummary(outputs);
+  const nextMetadata = {
+    ...metadata,
+    outputs,
+    latest_output_at: outputsSummary.latest_output_at,
+    output_count: outputsSummary.output_count,
+    updated: createdAt,
+    updated_at: createdAt
+  };
+  await client.putFile(metadataPath, `${JSON.stringify(nextMetadata, null, 2)}\n`, `Update outputs metadata for ${projectKey}`);
+  await updateGlobalIndex(client, nextMetadata);
+
+  return {
+    ok: true,
+    message: "Saved knowledge output to GitHub.",
+    title: nextMetadata.title || projectKey,
+    knowledge_type: knowledgeType,
+    project_key: projectKey,
+    output_type: outputType,
+    output_title: outputTitle,
+    output_url: outputUrl,
+    output_path: outputPath,
+    created_at: createdAt,
+    metadata_url: `${htmlBase}/${metadataPath}`,
+    index_url: `${htmlBase}/${basePath}/index.md`,
+    output_record: outputRecord,
+    output_summary: outputsSummary,
+    metadata: nextMetadata
   };
 }
 
