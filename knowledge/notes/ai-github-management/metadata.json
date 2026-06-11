@@ -1,0 +1,69 @@
+{
+  "title": "第一候補",
+  "project_key": "ai-github-management",
+  "project_key_source": "file_name_slug",
+  "title_source": "markdown_heading",
+  "category_source": "labeled_category",
+  "knowledge_type": "notes",
+  "category": "\"LUPRO実践ナレッジ\"",
+  "status": "saved",
+  "tools": [
+    "ChatGPT",
+    "Codex",
+    "GitHub",
+    "Slack",
+    "WordPress",
+    "note",
+    "X",
+    "Threads"
+  ],
+  "summary": "title: \"Gmail AI返信アドオンをGitHub管理・Codex改修で実用化するまで\" category: \"LUPRO実践ナレッジ\" status: \"draft\" theme: \"非エンジニアによるAI業務効率化 / Gmail返信作成の半自動化 / Codex活用 / GitHub管理 / 実用化までの試行錯誤\"",
+  "theme": "",
+  "source": "slack_event",
+  "source_type": "slack_file",
+  "input_type": "plain_text",
+  "file_name": "Gmail AI返信アドオンをGitHub管理・Codex改修で実用化するまで.txt",
+  "file_size": 31649,
+  "char_count": 13959,
+  "has_attachment": true,
+  "has_frontmatter": false,
+  "has_supplemental_text": false,
+  "parsed_json_available": false,
+  "save_mode": "new",
+  "path": "knowledge/notes/ai-github-management/index.md",
+  "raw_json_path": "knowledge/notes/ai-github-management/raw.json",
+  "raw_md_path": "knowledge/notes/ai-github-management/raw.md",
+  "raw_txt_path": "knowledge/notes/ai-github-management/raw.txt",
+  "supplemental_path": "knowledge/notes/ai-github-management/supplemental.md",
+  "raw_path": "knowledge/notes/ai-github-management/raw.txt",
+  "created": "2026-06-11T21:53:13+09:00",
+  "updated": "2026-06-11T21:53:13+09:00",
+  "created_at": "2026-06-11T21:53:13+09:00",
+  "updated_at": "2026-06-11T21:53:13+09:00",
+  "slack_channel": "C0B8YN010J2",
+  "slack_message_url": "",
+  "supplemental_text": "",
+  "warnings": [
+    "顧客名や会社名らしき情報が含まれている可能性があります。"
+  ],
+  "extracted": {
+    "private_or_sensitive_info_to_hide": [
+      "顧客名や会社名らしき情報が含まれている可能性があります。"
+    ],
+    "media_theme": "",
+    "article_main_message": "",
+    "content_strategy": "",
+    "wordpress_article_angles": "",
+    "note_article_angles": "",
+    "x_threads_post_ideas": ""
+  },
+  "outputs": {
+    "note": [],
+    "x_threads": [],
+    "paid_manual": [],
+    "template_readme": [],
+    "sales": []
+  },
+  "latest_output_at": "",
+  "output_count": 0
+}
