@@ -1,7 +1,7 @@
 {
   "pending_key": "C0B8YN010J2-1781160906.100249",
   "dedupe_key": "Ev0B9VQ3FFMX",
-  "status": "pending",
+  "status": "saved",
   "created_at": "2026-06-11T06:55:09.212Z",
   "channel": "C0B8YN010J2",
   "thread_ts": "1781160906.100249",
@@ -189,5 +189,38 @@
       "similar_reason": "本文の語句が近い"
     }
   ],
-  "confirmation_message_ts": "1781160910.141399"
+  "confirmation_message_ts": "1781160910.141399",
+  "updated_at": "2026-06-11T06:55:43.343Z",
+  "result": {
+    "message": "Saved knowledge to GitHub.",
+    "title": "AI実践ナレッジをnote記事・有料マニュアル・GitHubテンプレートに変える仕組みを作った話",
+    "knowledge_type": "notes",
+    "project_key": "ai-knowledge-github-note-content",
+    "project_key_source": "frontmatter.title",
+    "save_mode": "new",
+    "index_path": "knowledge/notes/ai-knowledge-github-note-content/index.md",
+    "raw_json_path": "knowledge/notes/ai-knowledge-github-note-content/raw.json",
+    "raw_md_path": "knowledge/notes/ai-knowledge-github-note-content/raw.md",
+    "raw_txt_path": "knowledge/notes/ai-knowledge-github-note-content/raw.txt",
+    "raw_path": "knowledge/notes/ai-knowledge-github-note-content/raw.txt",
+    "metadata_path": "knowledge/notes/ai-knowledge-github-note-content/metadata.json",
+    "supplemental_path": "knowledge/notes/ai-knowledge-github-note-content/supplemental.md",
+    "update_path": "",
+    "update_json_path": "",
+    "update_txt_path": "",
+    "created": "2026-06-11T15:55:33+09:00",
+    "updated": "2026-06-11T15:55:33+09:00",
+    "index_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-knowledge-github-note-content/index.md",
+    "raw_json_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-knowledge-github-note-content/raw.json",
+    "raw_md_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-knowledge-github-note-content/raw.md",
+    "raw_txt_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-knowledge-github-note-content/raw.txt",
+    "raw_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-knowledge-github-note-content/raw.txt",
+    "metadata_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-knowledge-github-note-content/metadata.json",
+    "supplemental_url": "",
+    "update_url": "",
+    "update_json_url": "",
+    "update_txt_url": "",
+    "is_update": false,
+    "json_parse_warning": ""
+  }
 }
