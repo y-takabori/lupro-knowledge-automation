@@ -1,7 +1,7 @@
 {
   "pending_key": "C0B8YN010J2-1781162939.712879",
   "dedupe_key": "Ev0B9MR4PENP",
-  "status": "pending",
+  "status": "saved",
   "created_at": "2026-06-11T07:29:02.617Z",
   "channel": "C0B8YN010J2",
   "thread_ts": "1781162939.712879",
@@ -202,5 +202,38 @@
       "similar_reason": "本文の語句が近い"
     }
   ],
-  "confirmation_message_ts": "1781162943.669009"
+  "confirmation_message_ts": "1781162943.669009",
+  "updated_at": "2026-06-11T07:30:27.366Z",
+  "result": {
+    "message": "Saved knowledge to GitHub.",
+    "title": "非エンジニアが請求書処理をAIで半自動化した実践記録：Gmail・Slack・freeeをつないで実務で使える形にするまで",
+    "knowledge_type": "notes",
+    "project_key": "ai-slack",
+    "project_key_source": "frontmatter.title",
+    "save_mode": "upsert",
+    "index_path": "knowledge/notes/ai-slack/index.md",
+    "raw_json_path": "knowledge/notes/ai-slack/raw.json",
+    "raw_md_path": "knowledge/notes/ai-slack/raw.md",
+    "raw_txt_path": "knowledge/notes/ai-slack/raw.txt",
+    "raw_path": "knowledge/notes/ai-slack/raw.txt",
+    "metadata_path": "knowledge/notes/ai-slack/metadata.json",
+    "supplemental_path": "knowledge/notes/ai-slack/supplemental.md",
+    "update_path": "",
+    "update_json_path": "",
+    "update_txt_path": "",
+    "created": "2026-06-11T16:30:17+09:00",
+    "updated": "2026-06-11T16:30:17+09:00",
+    "index_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-slack/index.md",
+    "raw_json_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-slack/raw.json",
+    "raw_md_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-slack/raw.md",
+    "raw_txt_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-slack/raw.txt",
+    "raw_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-slack/raw.txt",
+    "metadata_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/ai-slack/metadata.json",
+    "supplemental_url": "",
+    "update_url": "",
+    "update_json_url": "",
+    "update_txt_url": "",
+    "is_update": false,
+    "json_parse_warning": ""
+  }
 }
