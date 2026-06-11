@@ -1,7 +1,7 @@
 {
   "pending_key": "C0B8YN010J2-1781160055.109029",
   "dedupe_key": "Ev0B9TS6ABFC",
-  "status": "pending",
+  "status": "saved",
   "created_at": "2026-06-11T06:40:58.552Z",
   "channel": "C0B8YN010J2",
   "thread_ts": "1781160055.109029",
@@ -114,5 +114,38 @@
       "similar_reason": "本文の語句が近い"
     }
   ],
-  "confirmation_message_ts": "1781160059.467489"
+  "confirmation_message_ts": "1781160059.467489",
+  "updated_at": "2026-06-11T06:42:58.086Z",
+  "result": {
+    "message": "Saved knowledge to GitHub.",
+    "title": "複数Googleカレンダー招待をメインカレンダーへ集約する自動同期ツール",
+    "knowledge_type": "notes",
+    "project_key": "google",
+    "project_key_source": "frontmatter.title",
+    "save_mode": "upsert",
+    "index_path": "knowledge/notes/google/index.md",
+    "raw_json_path": "knowledge/notes/google/raw.json",
+    "raw_md_path": "knowledge/notes/google/raw.md",
+    "raw_txt_path": "knowledge/notes/google/raw.txt",
+    "raw_path": "knowledge/notes/google/raw.txt",
+    "metadata_path": "knowledge/notes/google/metadata.json",
+    "supplemental_path": "knowledge/notes/google/supplemental.md",
+    "update_path": "",
+    "update_json_path": "",
+    "update_txt_path": "",
+    "created": "2026-06-11T15:42:48+09:00",
+    "updated": "2026-06-11T15:42:48+09:00",
+    "index_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google/index.md",
+    "raw_json_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google/raw.json",
+    "raw_md_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google/raw.md",
+    "raw_txt_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google/raw.txt",
+    "raw_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google/raw.txt",
+    "metadata_url": "https://github.com/y-takabori/lupro-knowledge-automation/blob/main/knowledge/notes/google/metadata.json",
+    "supplemental_url": "",
+    "update_url": "",
+    "update_json_url": "",
+    "update_txt_url": "",
+    "is_update": false,
+    "json_parse_warning": ""
+  }
 }
